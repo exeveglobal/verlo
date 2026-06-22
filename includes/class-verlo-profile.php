@@ -123,7 +123,10 @@ class Verlo_Profile {
 
 		$snap = self::site_snapshot();
 		if ( empty( $snap['titles'] ) ) {
-			return new WP_Error( 'verlo_no_content', 'No indexed content to analyze. Build the knowledge graph first.' );
+			return new WP_Error(
+				'verlo_no_content',
+				'No content to analyze yet. Fill in the Strategy Profile fields manually — niche, audience, voice, and monetization model — then generate your topical map. You can run AI analysis later once the site has published posts.'
+			);
 		}
 
 		$p = self::get();

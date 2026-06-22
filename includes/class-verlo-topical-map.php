@@ -64,9 +64,9 @@ class Verlo_Topical_Map {
 		}
 
 		$snap = Verlo_Profile::site_snapshot( 40, 30 );
-		if ( empty( $snap['titles'] ) ) {
-			return new WP_Error( 'verlo_no_content', 'No indexed content. Build the knowledge graph first.' );
-		}
+		// No content guard here — a new site with zero posts is valid. The SaaS
+		// generates the content roadmap from the profile alone; empty covered_topics
+		// simply means nothing is pre-covered, which is correct for a fresh site.
 
 		$profile = Verlo_Profile::get();
 		$cats    = self::existing_categories();
