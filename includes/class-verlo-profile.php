@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 /**
@@ -12,10 +12,10 @@ class Verlo_Profile {
 
 	public static function monetization_models() {
 		return array(
-			'adsense'  => 'AdSense / display ads — traffic volume is the product (broad informational long-tails)',
-			'lead_gen' => 'Lead generation / services — conversions matter (bottom-funnel, strict brand voice)',
-			'ecommerce'=> 'E-commerce — product sales (buying guides, comparisons, category content)',
-			'authority'=> 'Authority / audience — brand and trust building (depth, original perspective)',
+			'adsense'  => 'AdSense / display ads: traffic volume is the product (broad informational long-tails)',
+			'lead_gen' => 'Lead generation / services: conversions matter (bottom-funnel, strict brand voice)',
+			'ecommerce'=> 'E-commerce: product sales (buying guides, comparisons, category content)',
+			'authority'=> 'Authority / audience: brand and trust building (depth, original perspective)',
 		);
 	}
 
@@ -125,7 +125,7 @@ class Verlo_Profile {
 		if ( empty( $snap['titles'] ) ) {
 			return new WP_Error(
 				'verlo_no_content',
-				'No content to analyze yet. Fill in the Strategy Profile fields manually — niche, audience, voice, and monetization model — then generate your topical map. You can run AI analysis later once the site has published posts.'
+				'No content to analyze yet. Fill in the Strategy Profile fields manually (niche, audience, voice, and monetization model), then generate your topical map. You can run Verlo analysis later once the site has published posts.'
 			);
 		}
 

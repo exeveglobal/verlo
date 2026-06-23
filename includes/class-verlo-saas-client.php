@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 /**
@@ -184,7 +184,7 @@ class Verlo_SaaS_Client {
 
 		return new WP_Error(
 			'verlo_timeout',
-			'The Verlo server took too long to respond. The operation may complete in the background — check back in a moment.'
+			'The Verlo server took too long to respond. The operation may complete in the background. Check back in a moment.'
 		);
 	}
 

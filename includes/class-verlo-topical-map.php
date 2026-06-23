@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 /**
@@ -205,20 +205,20 @@ class Verlo_Topical_Map {
 			if ( isset( $in_map[ $tid ] ) ) {
 				if ( 0 === (int) $c['count'] ) {
 					$verdict = 'keep';
-					$note    = 'New pillar category — no posts yet; planned articles will populate it.';
+					$note    = 'New pillar category. No posts yet; planned articles will populate it.';
 				} else {
 					$verdict = 'keep';
 					$note    = 'Reused as a pillar (' . (int) $c['count'] . ' existing posts).';
 				}
 			} elseif ( 0 === (int) $c['count'] ) {
 				$verdict = 'review';
-				$note    = 'Empty category, not in the map — candidate to retire (manual action; not automated).';
+				$note    = 'Empty category, not in the map. Candidate to retire (manual action; not automated).';
 			} elseif ( (int) $c['count'] < self::MIN_CLUSTER ) {
 				$verdict = 'review';
-				$note    = 'Thin category (' . (int) $c['count'] . ' posts), not in the map — consider merging its posts into a pillar (manual action).';
+				$note    = 'Thin category (' . (int) $c['count'] . ' posts), not in the map. Consider merging its posts into a pillar (manual action).';
 			} else {
 				$verdict = 'keep';
-				$note    = 'Populated category outside the map — left untouched.';
+				$note    = 'Populated category outside the map. Left untouched.';
 			}
 			$audit[] = array(
 				'term_id' => $tid,

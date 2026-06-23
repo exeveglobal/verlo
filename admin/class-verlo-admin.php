@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 /**
@@ -54,8 +54,8 @@ class Verlo_Admin {
 		$pct       = ( $progress['total'] > 0 ) ? round( ( $progress['done'] / $progress['total'] ) * 100 ) : 0;
 		?>
 		<div class="wrap verlo-wrap">
-			<h1>Verlo — Knowledge Graph</h1>
-			<p style="margin-top:2px;color:#646970;">The site's content index: powers internal linking, topic-gap analysis, and AI site analysis.</p>
+			<h1>Verlo: Knowledge Graph</h1>
+			<p style="margin-top:2px;color:#646970;">The site's content index: powers internal linking, topic-gap analysis, and Verlo site analysis.</p>
 			<?php if ( $running ) : ?>
 				<script>setTimeout(function(){ location.reload(); }, 3000);</script>
 			<?php endif; ?>
@@ -81,7 +81,7 @@ class Verlo_Admin {
 					<tr><td><strong>By type</strong></td><td>
 						<?php
 						if ( empty( $stats['by_type'] ) ) {
-							echo '—';
+							echo '-';
 						} else {
 							$parts = array();
 							foreach ( $stats['by_type'] as $row ) {
@@ -96,15 +96,15 @@ class Verlo_Admin {
 							<div style="background:#e0e0e0;border-radius:4px;height:18px;width:300px;max-width:100%;overflow:hidden;">
 								<div style="background:#2271b1;height:18px;width:<?php echo (int) $pct; ?>%;"></div>
 							</div>
-							<p style="margin:6px 0 0;">Indexing <?php echo (int) $progress['done']; ?> / <?php echo (int) $progress['total']; ?> (<?php echo (int) $pct; ?>%) — this page updates automatically.</p>
+							<p style="margin:6px 0 0;">Indexing <?php echo (int) $progress['done']; ?> / <?php echo (int) $progress['total']; ?> (<?php echo (int) $pct; ?>%). This page updates automatically.</p>
 						<?php else : ?>
-							Idle<?php echo ( $progress['total'] > 0 ) ? ' — last build indexed ' . (int) $progress['total'] . ' objects.' : ' — no published content found yet.'; ?>
+							Idle<?php echo ( $progress['total'] > 0 ) ? '. Last build: ' . (int) $progress['total'] . ' objects.' : '. No published content found yet.'; ?>
 						<?php endif; ?>
 					</td></tr>
 					<tr><td><strong>Current data</strong></td><td>
 						<?php
 						if ( (int) $stats['objects'] === 0 && ! $running ) {
-							echo 'Graph is empty — run a rebuild.';
+							echo 'Graph is empty. Run a rebuild.';
 						} else {
 							$current = Verlo_Build_Log::current_build();
 							if ( $current ) {
@@ -117,12 +117,12 @@ class Verlo_Admin {
 								$last_edit = (int) $stats['last_edit'];
 								if ( $last_edit && $last_edit > (int) $current['finished_at'] ) {
 									printf(
-										' <strong>Edited since</strong> — last content change %s ago, so the graph has drifted from this build.',
+										' <strong>Edited since:</strong> last content change %s ago, so the graph has drifted from this build.',
 										esc_html( human_time_diff( $last_edit, time() ) )
 									);
 								}
 							} else {
-								echo '—';
+								echo '-';
 							}
 						}
 						?>
@@ -133,7 +133,7 @@ class Verlo_Admin {
 
 			<div class="verlo-card verlo-card-full">
 			<h2>Indexed post types</h2>
-			<p class="verlo-sub">Which content the graph reads — the full site (posts, pages, custom types) is recommended.</p>
+			<p class="verlo-sub">Which content the graph reads. The full site (posts, pages, custom types) is recommended.</p>
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="verlo_save_types" />
 				<?php wp_nonce_field( 'verlo_save_types' ); ?>
@@ -149,7 +149,7 @@ class Verlo_Admin {
 
 			<div class="verlo-card verlo-card-full">
 			<h2>Rebuild &amp; maintenance</h2>
-			<p class="verlo-sub">The graph is derived data — rebuilding from current content is always safe. Large sites continue in background batches.</p>
+			<p class="verlo-sub">The graph is derived data. Rebuilding from current content is always safe. Large sites continue in background batches.</p>
 			<div class="verlo-actions">
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline">
 				<input type="hidden" name="action" value="verlo_rebuild" />
@@ -199,7 +199,7 @@ class Verlo_Admin {
 						}
 						echo '</div></details>';
 					} else {
-						echo '—';
+						echo '-';
 					}
 					echo '</td>';
 					echo '</tr>';
@@ -211,7 +211,7 @@ class Verlo_Admin {
 
 			<div class="verlo-card verlo-card-full">
 			<h2>Test related-content matching</h2>
-			<p class="verlo-sub">Enter a topic to see which existing content the graph offers as internal-link candidates — the matching the content strategist relies on.</p>
+			<p class="verlo-sub">Enter a topic to see which existing content the graph offers as internal-link candidates (the matching the content strategist relies on).</p>
 			<form method="get" action="">
 				<input type="hidden" name="page" value="verlo" />
 				<input type="text" name="verlo_test" value="<?php echo esc_attr( $test_q ); ?>" class="regular-text" placeholder="e.g. best running shoes for flat feet" />
@@ -224,7 +224,7 @@ class Verlo_Admin {
 				echo '<table class="widefat striped" style="max-width:760px;margin-top:10px">';
 				echo '<thead><tr><th>Score</th><th>Title</th><th>Type</th><th>URL</th></tr></thead><tbody>';
 				if ( empty( $results ) ) {
-					echo '<tr><td colspan="4">No related content found. (Empty graph, or no term overlap — try a topic closer to existing content.)</td></tr>';
+					echo '<tr><td colspan="4">No related content found. (Empty graph, or no term overlap. Try a topic closer to existing content.)</td></tr>';
 				} else {
 					foreach ( $results as $r ) {
 						printf(

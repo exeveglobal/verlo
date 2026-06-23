@@ -174,7 +174,7 @@ function verlo_env_admin_notice() {
 
 	$recheck = wp_nonce_url( add_query_arg( 'verlo_recheck_env', 1 ), 'verlo_recheck_env' );
 	echo '<div class=”notice notice-warning”><p><strong>Verlo: background tasks are being blocked on this site.</strong> '
-		. 'Articles and other AI steps still complete (the open admin tab finishes the work), but they start slower and you may see a “Run now” button. '
+		. 'Articles and other generation steps still complete (the open admin tab finishes the work), but they start slower and you may see a “Run now” button. '
 		. 'This is usually a security/firewall plugin (e.g. WP Hide, Wordfence) or a host setting blocking WordPress “loopback” requests and/or WP-Cron.</p>'
 		. '<p>To make Verlo fully automatic, allow internal requests to <code>admin-post.php</code> and <code>wp-cron.php</code> for this site in your security plugin '
 		. '(and approve outbound requests to the Verlo server for the Verlo plugin). '

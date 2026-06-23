@@ -39,7 +39,7 @@ class Verlo_Profile_Admin {
 				<div style="margin-top:14px;height:6px;width:220px;border-radius:999px;background:#eef0f2;overflow:hidden;">
 					<div style="height:100%;width:40%;border-radius:999px;background:#2271b1;animation:verlo-bar 1.1s ease-in-out infinite;"></div>
 				</div>
-				<div style="margin-top:10px;font-size:12px;color:#646970;">This can take a few seconds — please keep this tab open.</div>
+				<div style="margin-top:10px;font-size:12px;color:#646970;">This can take a few seconds. Please keep this tab open.</div>
 			</div>
 		</div>
 		<style>
@@ -198,10 +198,10 @@ class Verlo_Profile_Admin {
 						<form method="post" action="<?php echo esc_url( $url ); ?>">
 							<input type="hidden" name="action" value="verlo_disconnect" />
 							<?php wp_nonce_field( 'verlo_disconnect' ); ?>
-							<button type="submit" class="button button-secondary" onclick="return confirm('Disconnect Verlo? AI features will stop until you reconnect.');">Disconnect</button>
+							<button type="submit" class="button button-secondary" onclick="return confirm('Disconnect Verlo? Content generation will stop until you reconnect.');">Disconnect</button>
 						</form>
 					<?php else : ?>
-						<p class="verlo-sub">Enter your Verlo license key to activate AI-powered site analysis and article generation.</p>
+						<p class="verlo-sub">Enter your Verlo license key to activate smart site analysis and article generation.</p>
 						<form method="post" action="<?php echo esc_url( $url ); ?>">
 							<input type="hidden" name="action" value="verlo_connection" />
 							<?php wp_nonce_field( 'verlo_connection' ); ?>
@@ -253,15 +253,15 @@ class Verlo_Profile_Admin {
 					</form>
 				</div>
 
-				<!-- AI analysis card -->
+				<!-- Site analysis card -->
 				<div class="verlo-card">
-					<h2>AI site analysis</h2>
-					<p class="verlo-sub">Reads a low-token snapshot of your knowledge graph (sample titles + top vocabulary, never full posts) and proposes profile values for your review. One cheap call — nothing is final until you save.</p>
+					<h2>Site analysis</h2>
+					<p class="verlo-sub">Reads a low-token snapshot of your knowledge graph (sample titles + top vocabulary, never full posts) and proposes profile values for your review. One call. Nothing is final until you save.</p>
 					<form method="post" action="<?php echo esc_url( $url ); ?>">
 						<input type="hidden" name="action" value="verlo_analyze" />
 						<?php wp_nonce_field( 'verlo_analyze' ); ?>
 						<div class="verlo-actions">
-							<button type="submit" class="button button-primary" data-verlo-progress="Analyzing your site with AI…" data-verlo-phases="analyze" <?php disabled( ! $connected ); ?>>Analyze my site with AI</button>
+							<button type="submit" class="button button-primary" data-verlo-progress="Analyzing your site with Verlo…" data-verlo-phases="analyze" <?php disabled( ! $connected ); ?>>Analyze my site with Verlo</button>
 							<?php if ( ! $connected ) : ?>
 								<span class="description">Connect your Verlo license first.</span>
 							<?php endif; ?>
@@ -270,9 +270,9 @@ class Verlo_Profile_Admin {
 					<p class="verlo-meta">
 						<?php
 						if ( $p['meta']['inferred_at'] ) {
-							echo 'Last AI analysis: ' . esc_html( human_time_diff( (int) $p['meta']['inferred_at'], time() ) ) . ' ago.';
+							echo 'Last analysis: ' . esc_html( human_time_diff( (int) $p['meta']['inferred_at'], time() ) ) . ' ago.';
 						} else {
-							echo 'No AI analysis run yet.';
+							echo 'No analysis run yet.';
 						}
 						?>
 					</p>
@@ -286,10 +286,10 @@ class Verlo_Profile_Admin {
 					<?php if ( $complete ) : ?>
 						<span class="verlo-badge ok">Complete</span>
 					<?php else : ?>
-						<span class="verlo-badge warn">Incomplete — niche, audience &amp; voice required</span>
+						<span class="verlo-badge warn">Incomplete: niche, audience &amp; voice required</span>
 					<?php endif; ?>
 				</h2>
-				<p class="verlo-sub">Fill manually or accept/edit the AI proposal, then save.</p>
+				<p class="verlo-sub">Fill manually or accept/edit the Verlo proposal, then save.</p>
 				<form method="post" action="<?php echo esc_url( $url ); ?>">
 					<input type="hidden" name="action" value="verlo_save_profile" />
 					<?php wp_nonce_field( 'verlo_save_profile' ); ?>
@@ -303,7 +303,7 @@ class Verlo_Profile_Admin {
 									<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $p['monetization_model'], $key ); ?>><?php echo esc_html( $label ); ?></option>
 								<?php endforeach; ?>
 							</select>
-							<p class="description">The master switch — it changes keyword, tone, and volume strategy.</p>
+							<p class="description">The master switch. It changes keyword, tone, and volume strategy.</p>
 						</td></tr>
 						<tr class="verlo-field"><th>Audience</th><td><textarea name="audience" rows="3" placeholder="who they are and what they need"><?php echo esc_textarea( $p['audience'] ); ?></textarea></td></tr>
 						<tr class="verlo-field"><th>Voice</th><td><textarea name="voice" rows="2" placeholder="tone and style"><?php echo esc_textarea( $p['voice'] ); ?></textarea></td></tr>
@@ -411,7 +411,7 @@ class Verlo_Profile_Admin {
 			self::redirect( $msg, true, $link_kg );
 		}
 		Verlo_Profile::save( $proposed, 'inferred' );
-		self::redirect( 'AI proposed values from your content — review the fields below and Save profile.' );
+		self::redirect( 'Verlo proposed values from your content. Review the fields below and Save profile.' );
 	}
 
 	public static function handle_export() {

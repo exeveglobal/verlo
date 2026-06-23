@@ -41,7 +41,7 @@ class Verlo_Log_Admin {
 		?>
 		<div class="wrap verlo-wrap">
 			<h1>Logs</h1>
-			<p style="margin-top:2px;color:#646970;">Technical events from Verlo — AI calls, generation attempts, and errors (including API credit, rate limits, timeouts, and security-plugin blocks). The most recent <?php echo (int) Verlo_Log::MAX_ROWS; ?> events are kept.</p>
+			<p style="margin-top:2px;color:#646970;">Technical events from Verlo: generation attempts, calls, and errors (including API credit, rate limits, timeouts, and security-plugin blocks). The most recent <?php echo (int) Verlo_Log::MAX_ROWS; ?> events are kept.</p>
 
 			<?php if ( $notice ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php echo esc_html( $notice ); ?></p></div>

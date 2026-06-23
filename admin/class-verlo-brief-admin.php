@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 /**
@@ -89,7 +89,7 @@ class Verlo_Brief_Admin {
 		?>
 		<div class="wrap verlo-wrap">
 			<h1>Content Briefs</h1>
-			<p style="margin-top:2px;color:#646970;">The spec for each planned article — title, angle, outline, internal links, intent. Reviewed before anything is written.</p>
+			<p style="margin-top:2px;color:#646970;">The spec for each planned article: title, angle, outline, internal links, and intent. Reviewed before anything is written.</p>
 			<?php if ( $notice && '__generating__' !== $notice ) : ?>
 				<div class="notice <?php echo $is_error ? 'notice-error' : 'notice-success'; ?> is-dismissible"><p><?php echo esc_html( $notice ); ?></p></div>
 			<?php endif; ?>
@@ -127,7 +127,7 @@ class Verlo_Brief_Admin {
 				<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline">
 					<input type="hidden" name="action" value="verlo_brief_generate_next" />
 					<?php wp_nonce_field( 'verlo_brief_generate_next' ); ?>
-					<button type="submit" class="button button-primary" data-verlo-progress="Writing the brief with AI…" data-verlo-phases="brief" <?php disabled( ! $next ); ?>>
+					<button type="submit" class="button button-primary" data-verlo-progress="Writing brief with Verlo…" data-verlo-phases="brief" <?php disabled( ! $next ); ?>>
 						<?php echo $next ? 'Generate next brief' : 'All planned articles briefed'; ?>
 					</button>
 				</form>
@@ -163,7 +163,7 @@ class Verlo_Brief_Admin {
 										<input type="hidden" name="action" value="verlo_brief_generate" />
 										<input type="hidden" name="article_id" value="<?php echo (int) $a['id']; ?>" />
 										<?php wp_nonce_field( 'verlo_brief_generate' ); ?>
-										<button type="submit" class="button button-small button-primary" data-verlo-progress="Writing the brief with AI…" data-verlo-phases="brief">Generate brief</button>
+										<button type="submit" class="button button-small button-primary" data-verlo-progress="Writing brief with Verlo…" data-verlo-phases="brief">Generate brief</button>
 									</form>
 								<?php endif; ?>
 							</td>
@@ -303,7 +303,7 @@ class Verlo_Brief_Admin {
 							<div class="verlo-gen-msg" id="verlo-gen-msg">Starting up…</div>
 						</div>
 					</div>
-					<div class="verlo-gen-note">This runs in the background and can take a minute or two. You can safely stay on this page — it will update automatically when the draft is ready. No need to refresh, and please don't click generate again.</div>
+					<div class="verlo-gen-note">This runs in the background and can take a minute or two. You can safely stay on this page. It will update automatically when the draft is ready. No need to refresh, and please don't click generate again.</div>
 				</div>
 			<?php elseif ( 'error' === $gen['state'] && ! $draft_post ) : ?>
 				<div class="notice notice-error inline" style="margin:8px 0 16px;"><p><strong>Generation failed:</strong> <?php echo esc_html( $gen['message'] ); ?></p></div>
@@ -345,7 +345,7 @@ class Verlo_Brief_Admin {
 				<div style="margin:8px 0 16px;padding:18px 20px;border:1px solid #c3d9ec;border-radius:10px;background:linear-gradient(180deg,#f3f9ff,#fff);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
 					<div>
 						<div style="font-size:15px;font-weight:600;color:#1d2327;">Ready to write the article</div>
-						<div class="description" style="margin-top:2px;">Generates a full draft from this brief into the “<?php echo esc_html( $b['pillar'] ); ?>” category. Saved as a draft for your review — never auto-published. One Claude call.</div>
+						<div class=”description” style=”margin-top:2px;”>Generates a full draft from this brief into the “<?php echo esc_html( $b['pillar'] ); ?>” category. Saved as a draft for your review. Never auto-published.</div>
 					</div>
 					<form method="post" action="<?php echo esc_url( $url ); ?>" style="margin:0;">
 						<input type="hidden" name="action" value="verlo_brief_generate_article" />
@@ -390,11 +390,11 @@ class Verlo_Brief_Admin {
 
 			<hr />
 			<div class="verlo-actions">
-				<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline" onsubmit="return confirm('Regenerate this brief with AI? Your edits will be replaced.');">
+				<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline" onsubmit="return confirm('Regenerate this brief with Verlo? Your edits will be replaced.');">
 					<input type="hidden" name="action" value="verlo_brief_generate" />
 					<input type="hidden" name="article_id" value="<?php echo (int) $aid; ?>" />
 					<?php wp_nonce_field( 'verlo_brief_generate' ); ?>
-					<button type="submit" class="button" data-verlo-progress="Rewriting the brief with AI…" data-verlo-phases="brief">Regenerate with AI</button>
+					<button type="submit" class="button" data-verlo-progress="Rewriting brief with Verlo…" data-verlo-phases="brief">Regenerate with Verlo</button>
 				</form>
 				<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline" onsubmit="return confirm('Delete this brief?');">
 					<input type="hidden" name="action" value="verlo_brief_delete" />
@@ -462,9 +462,9 @@ class Verlo_Brief_Admin {
 					// yet: stop pretending, show an honest waiting state with a
 					// live elapsed timer.
 					clearInterval(roll);
-					if(msgEl){ msgEl.textContent = 'Finishing up — working on it (' + fmtElapsed() + ' elapsed)'; }
+					if(msgEl){ msgEl.textContent = 'Finishing up, working on it (' + fmtElapsed() + ' elapsed)'; }
 					elapsedTick = setInterval(function(){
-						if(msgEl && !finished){ msgEl.textContent = 'Finishing up — working on it (' + fmtElapsed() + ' elapsed)'; }
+						if(msgEl && !finished){ msgEl.textContent = 'Finishing up, working on it (' + fmtElapsed() + ' elapsed)'; }
 					}, 1000);
 				}
 			}
@@ -553,7 +553,7 @@ class Verlo_Brief_Admin {
 		$aid = (int) ( $_POST['article_id'] ?? 0 );
 		$res = Verlo_Strategist::build_brief( $aid );
 		if ( is_wp_error( $res ) ) { self::redirect( 'Brief failed: ' . $res->get_error_message(), true ); }
-		self::redirect_to_brief( $aid, 'Brief generated — review and edit below.' );
+		self::redirect_to_brief( $aid, 'Brief generated. Review and edit below.' );
 	}
 
 	public static function handle_generate_next() {
@@ -562,7 +562,7 @@ class Verlo_Brief_Admin {
 		if ( ! $next ) { self::redirect( 'Every planned article already has a brief.' ); }
 		$res = Verlo_Strategist::build_brief( $next['id'] );
 		if ( is_wp_error( $res ) ) { self::redirect( 'Brief failed: ' . $res->get_error_message(), true ); }
-		self::redirect_to_brief( $next['id'], 'Brief generated for "' . $next['keyword'] . '" — review below.' );
+		self::redirect_to_brief( $next['id'], 'Brief generated for "' . $next['keyword'] . '". Review below.' );
 	}
 
 	public static function handle_save() {
@@ -621,7 +621,7 @@ class Verlo_Brief_Admin {
 			if ( is_wp_error( $res ) ) {
 				self::redirect_to_brief( $aid, $prefix . 'Could not start the next brief: ' . $res->get_error_message(), true );
 			}
-			self::redirect_to_brief( $next['id'], 'Brief generated for "' . $next['keyword'] . '" — review below.' );
+			self::redirect_to_brief( $next['id'], 'Brief generated for "' . $next['keyword'] . '". Review below.' );
 		}
 
 		if ( ! empty( $dropped ) ) {

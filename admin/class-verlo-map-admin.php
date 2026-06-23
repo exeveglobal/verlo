@@ -60,7 +60,7 @@ class Verlo_Map_Admin {
 					<?php if ( $approved ) : ?>
 						<span class="verlo-badge ok">Approved</span>
 					<?php elseif ( $draft ) : ?>
-						<span class="verlo-badge warn">Draft — review &amp; approve</span>
+						<span class="verlo-badge warn">Draft: review &amp; approve</span>
 					<?php else : ?>
 						<span class="verlo-badge off">Not generated</span>
 					<?php endif; ?>
@@ -73,7 +73,7 @@ class Verlo_Map_Admin {
 				</p>
 				<?php if ( $draft && ! empty( $stats['thin'] ) ) : ?>
 					<div class="notice notice-warning inline" style="margin:4px 0 12px;"><p>
-						<strong>Can't approve yet</strong> — these pillars are below the <?php echo (int) Verlo_Topical_Map::MIN_CLUSTER; ?>-article minimum:
+						<strong>Can't approve yet.</strong> These pillars are below the <?php echo (int) Verlo_Topical_Map::MIN_CLUSTER; ?>-article minimum:
 						<?php echo esc_html( implode( ', ', $stats['thin'] ) ); ?>. Add articles or remove the pillar(s).
 					</p></div>
 				<?php endif; ?>
@@ -93,7 +93,7 @@ class Verlo_Map_Admin {
 						<input type="hidden" name="action" value="verlo_map_generate" />
 						<?php wp_nonce_field( 'verlo_map_generate' ); ?>
 						<?php if ( $approved ) : ?><input type="hidden" name="force" value="1" /><?php endif; ?>
-						<button type="submit" class="button <?php echo $map['pillars'] ? '' : 'button-primary'; ?>" data-verlo-progress="Designing your topical map with AI…" data-verlo-phases="map">Generate map with AI<?php echo $map['pillars'] ? ' (replace draft)' : ''; ?></button>
+						<button type="submit" class="button <?php echo $map['pillars'] ? '' : 'button-primary'; ?>" data-verlo-progress="Designing your topical map with Verlo…" data-verlo-phases="map">Generate map with Verlo<?php echo $map['pillars'] ? ' (replace draft)' : ''; ?></button>
 					</form>
 					<?php if ( $draft ) : ?>
 						<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline">
@@ -129,19 +129,24 @@ class Verlo_Map_Admin {
 								<span class="verlo-badge off">New category on approval</span>
 							<?php endif; ?>
 							<?php if ( $thin ) : ?>
-								<span class="verlo-badge warn">Too thin — needs <?php echo (int) Verlo_Topical_Map::MIN_CLUSTER; ?>+ articles</span>
+								<span class="verlo-badge warn">Too thin: needs <?php echo (int) Verlo_Topical_Map::MIN_CLUSTER; ?>+ articles</span>
 							<?php endif; ?>
 						</h2>
 						<?php if ( $thin ) : ?>
 							<div class="notice notice-warning inline" style="margin:8px 0;"><p>
 								This pillar has <?php echo count( $p['articles'] ); ?> planned article(s); the minimum is <?php echo (int) Verlo_Topical_Map::MIN_CLUSTER; ?>.
-								Add <?php echo (int) Verlo_Topical_Map::MIN_CLUSTER - count( $p['articles'] ); ?> more, or remove the pillar — the map can't be approved while it's below the minimum (no category should exist without a real content plan behind it).
+								Add <?php echo (int) Verlo_Topical_Map::MIN_CLUSTER - count( $p['articles'] ); ?> more, or remove the pillar. The map can't be approved while it's below the minimum (no category should exist without a real content plan behind it).
 							</p></div>
 						<?php endif; ?>
 						<p class="verlo-sub"><?php echo esc_html( $p['description'] ); ?></p>
 
 						<table class="widefat striped">
-							<thead><tr><th style="width:48%">Planned article (keyword)</th><th>Intent</th><th>Status</th><th style="width:90px"></th></tr></thead>
+							<thead><tr>
+								<th style="width:48%">Planned article</th>
+								<th>Intent</th>
+								<th>Status</th>
+								<th style="width:90px"></th>
+							</tr></thead>
 							<tbody>
 							<?php foreach ( $p['articles'] as $a ) : ?>
 								<tr>
@@ -168,7 +173,7 @@ class Verlo_Map_Admin {
 								</tr>
 							<?php endforeach; ?>
 							<?php if ( empty( $p['articles'] ) ) : ?>
-								<tr><td colspan="4">No planned articles yet — add at least <?php echo (int) Verlo_Topical_Map::MIN_CLUSTER; ?> or remove this pillar.</td></tr>
+								<tr><td colspan="4">No planned articles yet. Add at least <?php echo (int) Verlo_Topical_Map::MIN_CLUSTER; ?> or remove this pillar.</td></tr>
 							<?php endif; ?>
 							</tbody>
 						</table>
@@ -216,7 +221,7 @@ class Verlo_Map_Admin {
 				<?php if ( ! empty( $map['audit'] ) ) : ?>
 					<div class="verlo-card verlo-card-full">
 						<h2>Existing category audit</h2>
-						<p class="verlo-sub">Advisory only — nothing here is changed automatically. Merging or retiring categories moves URLs and is a manual decision (with redirects).</p>
+						<p class="verlo-sub">Advisory only. Nothing here is changed automatically. Merging or retiring categories moves URLs and is a manual decision (with redirects).</p>
 						<table class="widefat striped">
 							<thead><tr><th>Category</th><th>Posts</th><th>Verdict</th><th>Note</th></tr></thead>
 							<tbody>
@@ -253,7 +258,7 @@ class Verlo_Map_Admin {
 		if ( is_wp_error( $res ) ) {
 			self::redirect( 'Map generation failed: ' . $res->get_error_message(), true );
 		}
-		self::redirect( 'Draft map generated — review the pillars below, edit as needed, then Approve.' );
+		self::redirect( 'Draft map generated. Review the pillars below, edit as needed, then Approve.' );
 	}
 
 	public static function handle_approve() {
@@ -300,7 +305,7 @@ class Verlo_Map_Admin {
 		$name = sanitize_text_field( wp_unslash( $_POST['name'] ?? '' ) );
 		if ( '' === $name ) { self::redirect( 'Enter a pillar name.', true ); }
 		Verlo_Topical_Map::add_pillar( $name, sanitize_text_field( wp_unslash( $_POST['description'] ?? '' ) ) );
-		self::redirect( 'Pillar added — now add its planned articles.' );
+		self::redirect( 'Pillar added. Now add its planned articles.' );
 	}
 
 	public static function handle_recheck() {
