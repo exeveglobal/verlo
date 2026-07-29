@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 class Verlo_SaaS_Client {
 
-	const DEFAULT_SAAS_URL = 'https://api.verlo.app';
+	const DEFAULT_SAAS_URL = 'https://api.verlohub.com';
 
 	/**
 	 * Submit a job. Returns job_id (string) or WP_Error.
