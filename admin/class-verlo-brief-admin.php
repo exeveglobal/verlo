@@ -136,6 +136,30 @@ class Verlo_Brief_Admin {
 		</div>
 
 		<?php
+		$mismatches = Verlo_Strategist::audit_links();
+		if ( ! empty( $mismatches ) ) : ?>
+			<div class="verlo-card verlo-card-full" style="border-left:4px solid #d63638;">
+				<h2 style="color:#d63638;">⚠ <?php echo count( $mismatches ); ?> brief<?php echo 1 === count( $mismatches ) ? '' : 's'; ?> linked to the wrong post</h2>
+				<p class="verlo-sub">These rows show a keyword from the current map, but the linked post was actually generated for a different keyword, almost always leftover from a map regeneration before article IDs were made stable. Nothing was changed automatically; review each and use "Regenerate article" on the affected brief once you've decided what to do with the orphaned post below.</p>
+				<table class="widefat striped">
+					<thead><tr><th>Row currently shows</th><th>Linked post was actually generated for</th><th>Linked post</th><th></th></tr></thead>
+					<tbody>
+					<?php foreach ( $mismatches as $m ) : ?>
+						<tr>
+							<td><?php echo esc_html( $m['shown_keyword'] ); ?></td>
+							<td><?php echo esc_html( $m['generated_for_keyword'] ); ?></td>
+							<td><?php echo esc_html( $m['post_title'] ); ?></td>
+							<td>
+								<a class="button button-small" href="<?php echo esc_url( $m['edit_url'] ); ?>">Edit that post</a>
+								<a class="button button-small" href="<?php echo esc_url( admin_url( 'admin.php?page=verlo-briefs&verlo_brief=' . $m['article_id'] ) ); ?>">Open the brief</a>
+							</td>
+						</tr>
+					<?php endforeach; ?>
+					</tbody>
+				</table>
+			</div>
+		<?php endif; ?>
+		<?php
 		// Group planned articles by pillar.
 		$by_pillar = array();
 		foreach ( Verlo_Strategist::planned_articles() as $a ) {

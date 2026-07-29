@@ -60,6 +60,56 @@ class Verlo_Strategist {
 	}
 
 	/**
+	 * Detect Content Brief rows where the linked post doesn't actually match
+	 * the keyword currently shown for that row. This happens when a brief's
+	 * article_id was reused by a later map regeneration before the id-stability
+	 * fix in Verlo_Topical_Map::generate() - the row displays the CURRENT map's
+	 * keyword, but the stored post link is whatever that recycled id pointed to
+	 * historically. Ground truth is the _verlo_keyword post meta, written once
+	 * at generation time and never touched again by later map changes.
+	 *
+	 * Returns a list of [ 'article_id', 'shown_keyword', 'post_id', 'post_title',
+	 * 'generated_for_keyword', 'edit_url' ] - one row per confirmed mismatch.
+	 */
+	public static function audit_links() {
+		$mismatches = array();
+		foreach ( self::planned_articles() as $a ) {
+			$status = self::pipeline_status( $a['id'] );
+			if ( empty( $status['post_id'] ) ) { continue; } // no linked post, nothing to check
+
+			$post_id = (int) $status['post_id'];
+			$post    = get_post( $post_id );
+			if ( ! $post ) { continue; } // handled separately as "deleted" in the article log
+
+			$generated_for = (string) get_post_meta( $post_id, '_verlo_keyword', true );
+			if ( '' === $generated_for ) { continue; } // pre-dates the _verlo_keyword meta; can't verify
+
+			if ( self::normalise( $generated_for ) !== self::normalise( $a['keyword'] ) ) {
+				$mismatches[] = array(
+					'article_id'            => (int) $a['id'],
+					'shown_keyword'         => $a['keyword'],
+					'post_id'               => $post_id,
+					'post_title'            => get_the_title( $post_id ),
+					'generated_for_keyword' => $generated_for,
+					'edit_url'              => get_edit_post_link( $post_id, 'raw' ),
+				);
+			}
+		}
+		return $mismatches;
+	}
+
+	/**
+	 * Same normalisation rule as Verlo_Topical_Map::normalise_key(), kept as an
+	 * independent copy here since the two classes intentionally don't depend on
+	 * each other's internals.
+	 */
+	protected static function normalise( $text ) {
+		$text = strtolower( trim( (string) $text ) );
+		$text = preg_replace( '/\s+/', ' ', $text );
+		return rtrim( $text, " ?.!" );
+	}
+
+	/**
 	 * The next planned article without a brief, chosen ROUND-ROBIN across
 	 * pillars: one from each pillar before any pillar gets a second. With many
 	 * pillars this spreads coverage so no category waits for others to finish.

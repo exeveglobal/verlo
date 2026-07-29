@@ -99,9 +99,30 @@ class Verlo_Topical_Map {
 			return new WP_Error( 'verlo_bad_map', 'AI did not return any pillars.' );
 		}
 
+		// Preserve IDs across regeneration: match new pillars/articles back to
+		// the map that existed before this call by normalised name/keyword, and
+		// reuse their id. Only genuinely new items get a fresh id, and fresh
+		// ids always start above every id ever used so far - never reused for
+		// a different keyword later. Without this, ids reset to 1 on every
+		// generate() call and briefs/published-post links (stored keyed by
+		// article id) silently attach themselves to whatever new keyword ends
+		// up at that recycled number.
+		$old_pillar_by_name = array();
+		$old_article_by_kw  = array();
+		$max_pid            = 0;
+		$max_aid            = 0;
+		foreach ( $map['pillars'] as $op ) {
+			$max_pid = max( $max_pid, (int) $op['id'] );
+			$old_pillar_by_name[ self::normalise_key( $op['name'] ) ] = (int) $op['id'];
+			foreach ( $op['articles'] as $oa ) {
+				$max_aid = max( $max_aid, (int) $oa['id'] );
+				$old_article_by_kw[ self::normalise_key( $oa['keyword'] ) ] = (int) $oa['id'];
+			}
+		}
+		$next_pid = $max_pid + 1;
+		$next_aid = $max_aid + 1;
+
 		$pillars = array();
-		$pid     = 1;
-		$aid     = 1;
 		foreach ( $result['pillars'] as $rp ) {
 			$name = sanitize_text_field( $rp['name'] ?? '' );
 			if ( '' === $name ) { continue; }
@@ -113,8 +134,12 @@ class Verlo_Topical_Map {
 				$kw = self::scrub_stale_years( $kw );
 				$kw = Verlo_Text::humanize( $kw );
 				$intent = in_array( ( $ra['intent'] ?? '' ), array( 'informational', 'commercial', 'transactional', 'navigational' ), true ) ? $ra['intent'] : 'informational';
+
+				$norm = self::normalise_key( $kw );
+				$id   = isset( $old_article_by_kw[ $norm ] ) ? $old_article_by_kw[ $norm ] : $next_aid++;
+
 				$articles[] = array(
-					'id'      => $aid++,
+					'id'      => $id,
 					'keyword' => $kw,
 					'intent'  => $intent,
 					'status'  => 'planned', // planned | covered | drafted | published
@@ -132,8 +157,11 @@ class Verlo_Topical_Map {
 				}
 			}
 
+			$pillar_norm = self::normalise_key( $name );
+			$pillar_id   = isset( $old_pillar_by_name[ $pillar_norm ] ) ? $old_pillar_by_name[ $pillar_norm ] : $next_pid++;
+
 			$pillars[] = array(
-				'id'          => $pid++,
+				'id'          => $pillar_id,
 				'name'        => Verlo_Text::humanize( $name ),
 				'description' => Verlo_Text::humanize( sanitize_text_field( $rp['description'] ?? '' ) ),
 				'category_id' => $existing_id, // 0 => to be created on approval
@@ -163,6 +191,20 @@ class Verlo_Topical_Map {
 	 */
 	public static function scrub_stale_years( $keyword ) {
 		return Verlo_Text::scrub_stale_years( $keyword );
+	}
+
+	/**
+	 * Normalise a keyword or pillar name for cross-regeneration identity
+	 * matching: lowercase, collapse whitespace, trim trailing punctuation.
+	 * Deliberately simple (exact-ish match, not fuzzy) - matching too loosely
+	 * risks merging two genuinely different planned articles onto one id,
+	 * which would be worse than the bug this is fixing.
+	 */
+	protected static function normalise_key( $text ) {
+		$text = strtolower( trim( (string) $text ) );
+		$text = preg_replace( '/\s+/', ' ', $text );
+		$text = rtrim( $text, " ?.!" );
+		return $text;
 	}
 
 	/**

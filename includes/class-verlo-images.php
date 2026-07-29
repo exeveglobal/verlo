@@ -288,18 +288,31 @@ class Verlo_Images {
 		}
 
 		// Cap to the number of available slots and pick evenly-spaced ones.
+		//
+		// NOTE: the previous version picked slots where ($i % $step === 0). For
+		// n=1 that made $step = $slot_count, which only ever matches on the very
+		// last iteration - i.e. every single-image article landed on the LAST
+		// heading, no matter how long the article was. Fixed by spacing slots
+		// across the 1..n+1 fractions of the article instead of using modulo.
 		$n          = min( $n, count( $slots ) );
 		$slot_count = count( $slots );
-		$step       = max( 1, (int) floor( $slot_count / $n ) );
 
 		$chosen = array();
-		for ( $i = 1; $i <= $slot_count && count( $chosen ) < $n; $i++ ) {
-			if ( 0 === ( $i % $step ) ) { $chosen[] = $slots[ $i - 1 ]; }
+		for ( $k = 1; $k <= $n; $k++ ) {
+			$idx = (int) round( ( $k / ( $n + 1 ) ) * $slot_count ) - 1;
+			$idx = max( 0, min( $slot_count - 1, $idx ) );
+			$chosen[ $idx ] = $slots[ $idx ]; // keyed by index -> de-dupes automatically
 		}
-		// Safety net: if the step math left us short (shouldn't normally happen).
-		while ( count( $chosen ) < $n ) { $chosen[] = $slots[ $slot_count - 1 ]; }
-		$chosen = array_values( array_unique( $chosen ) );
-		sort( $chosen );
+		// Safety net: if de-duping left us short (only possible when n is close
+		// to slot_count), fill remaining unused slots left-to-right.
+		if ( count( $chosen ) < $n ) {
+			foreach ( $slots as $idx => $offset ) {
+				if ( count( $chosen ) >= $n ) { break; }
+				if ( ! isset( $chosen[ $idx ] ) ) { $chosen[ $idx ] = $offset; }
+			}
+		}
+		ksort( $chosen );
+		$chosen = array_values( $chosen );
 
 		$out  = '';
 		$last = 0;

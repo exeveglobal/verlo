@@ -3,8 +3,8 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 /**
  * Lightweight, self-contained event log for Verlo. Captures technical detail
- * about AI calls, generation attempts, dispatch mechanics, and failures so we
- * can diagnose problems on real sites (e.g. Anthropic credit exhaustion, rate
+ * about SaaS job calls, generation attempts, dispatch mechanics, and failures
+ * so we can diagnose problems on real sites (e.g. plan limits exceeded, rate
  * limits, security-plugin blocks, host timeouts) instead of guessing.
  *
  * Storage: a single capped option (ring buffer), autoload off. No custom table,

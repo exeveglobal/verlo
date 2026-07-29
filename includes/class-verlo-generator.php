@@ -510,23 +510,90 @@ class Verlo_Generator {
 
 		$html = wp_kses_post( $html );
 
-		$home = wp_parse_url( home_url(), PHP_URL_HOST );
+		$home            = wp_parse_url( home_url(), PHP_URL_HOST );
+		$kept_outbound   = 0;
+		$stripped_hosts  = array();
 		$html = preg_replace_callback(
 			'/<a\b[^>]*href=["\']([^"\']*)["\'][^>]*>(.*?)<\/a>/is',
-			function ( $m ) use ( $home ) {
+			function ( $m ) use ( $home, &$kept_outbound, &$stripped_hosts ) {
 				$host = wp_parse_url( $m[1], PHP_URL_HOST );
 				if ( ! $host || $host === $home ) {
 					return $m[0]; // internal link -> keep as-is
 				}
 				if ( self::host_allowed( $host ) ) {
 					// Authoritative outbound link: keep, dofollow, safe target attrs.
+					$kept_outbound++;
 					return '<a href="' . esc_url( $m[1] ) . '" target="_blank" rel="noopener">' . $m[2] . '</a>';
 				}
-				return $m[2]; // unknown external link -> keep anchor text only
+				$stripped_hosts[] = $host; // unknown external link -> keep anchor text only
+				return $m[2];
 			},
 			$html
 		);
+
+		// The brief asked for outbound links but none survived the allowlist -
+		// either the model didn't add one, or it linked to a host not on this
+		// site's allowlist (see outbound_allowlist()). Make this visible in the
+		// Logs tab instead of a silent gap, and guarantee at least one real,
+		// working outbound link via a verified Wikipedia fallback rather than
+		// just hoping the next generation does better.
+		if ( 0 === $kept_outbound ) {
+			if ( class_exists( 'Verlo_Log' ) ) {
+				Verlo_Log::warn(
+					'outbound_link_missing',
+					'No allowed outbound link survived sanitization for "' . $brief['keyword'] . '"; inserting a verified Wikipedia fallback.',
+					array( 'stripped_hosts' => array_values( array_unique( $stripped_hosts ) ) )
+				);
+			}
+			$fallback = self::wikipedia_fallback_link( $brief['keyword'] );
+			if ( $fallback ) {
+				$link = '<p>Learn more: <a href="' . esc_url( $fallback['url'] ) . '" target="_blank" rel="noopener">' . esc_html( $fallback['title'] ) . '</a> on Wikipedia.</p>';
+				// Insert just before the FAQ section if present, so it reads as
+				// part of the body rather than a bolted-on afterthought.
+				if ( preg_match( '/<h2[^>]*>\s*FAQ/i', $html, $fm, PREG_OFFSET_CAPTURE ) ) {
+					$pos  = $fm[0][1];
+					$html = substr( $html, 0, $pos ) . $link . "\n\n" . substr( $html, $pos );
+				} else {
+					$html .= "\n\n" . $link;
+				}
+			} elseif ( class_exists( 'Verlo_Log' ) ) {
+				Verlo_Log::warn( 'outbound_link_fallback_failed', 'Wikipedia fallback lookup found no match for "' . $brief['keyword'] . '"; article published with zero outbound links.' );
+			}
+		}
+
 		return $html;
+	}
+
+	/**
+	 * Find a real, existing Wikipedia article for a keyword via the public
+	 * opensearch API, so the guaranteed fallback link is never a 404. Returns
+	 * [ 'title' => ..., 'url' => ... ] or null if no reasonable match exists
+	 * or the lookup fails (never fatal - articles must still publish).
+	 */
+	protected static function wikipedia_fallback_link( $keyword ) {
+		$keyword = trim( (string) $keyword );
+		if ( '' === $keyword ) { return null; }
+
+		$url = add_query_arg(
+			array(
+				'action' => 'opensearch',
+				'search' => rawurlencode( $keyword ),
+				'limit'  => 1,
+				'format' => 'json',
+			),
+			'https://en.wikipedia.org/w/api.php'
+		);
+
+		$res = wp_remote_get( $url, array( 'timeout' => 8 ) );
+		if ( is_wp_error( $res ) || 200 !== (int) wp_remote_retrieve_response_code( $res ) ) {
+			return null;
+		}
+
+		$body = json_decode( wp_remote_retrieve_body( $res ), true );
+		// opensearch shape: [ query, [titles], [descriptions], [urls] ]
+		if ( empty( $body[1][0] ) || empty( $body[3][0] ) ) { return null; }
+
+		return array( 'title' => (string) $body[1][0], 'url' => (string) $body[3][0] );
 	}
 
 	protected static function resolve_category_id( $pillar_name ) {
@@ -616,6 +683,8 @@ class Verlo_Generator {
 			case 'ul':
 			case 'ol':
 				return self::list_to_block( $dom, $node, 'ol' === $tag );
+			case 'table':
+				return self::table_to_block( $dom, $node );
 			default:
 				// Wrap anything else as a paragraph if it has content.
 				return '' !== $inner ? "<!-- wp:paragraph -->\n<p>{$inner}</p>\n<!-- /wp:paragraph -->\n\n" : '';
@@ -636,6 +705,20 @@ class Verlo_Generator {
 		$tag  = $ordered ? 'ol' : 'ul';
 		$attr = $ordered ? ' {"ordered":true}' : '';
 		return "<!-- wp:list{$attr} -->\n<{$tag}>\n{$items}</{$tag}>\n<!-- /wp:list -->\n\n";
+	}
+
+	/**
+	 * Wrap a <table> element in Gutenberg's table block markup so it renders
+	 * as a native, editable table instead of falling through the default
+	 * case, which previously wrapped it in a <p> tag - invalid HTML that
+	 * Gutenberg flagged as content needing manual "attempt block recovery".
+	 */
+	protected static function table_to_block( $dom, $node ) {
+		$inner = trim( preg_replace( '/\s+/', ' ', self::inner_html( $dom, $node ) ) );
+		if ( '' === $inner ) { return ''; }
+		return "<!-- wp:table -->\n"
+			. "<figure class=\"wp-block-table\"><table class=\"wp-block-table\">{$inner}</table></figure>\n"
+			. "<!-- /wp:table -->\n\n";
 	}
 
 	protected static function inner_html( $dom, $node ) {

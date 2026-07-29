@@ -2,8 +2,8 @@
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 /**
- * Admin page: Logs. Surfaces the technical event log (AI calls, generation
- * attempts, errors including Anthropic credit/rate-limit problems and host/
+ * Admin page: Logs. Surfaces the technical event log (SaaS job submissions,
+ * generation attempts, errors including plan/rate-limit problems and host/
  * security-plugin blocks) so issues can be diagnosed rather than guessed at.
  */
 class Verlo_Log_Admin {

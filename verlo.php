@@ -3,7 +3,7 @@
  * Plugin Name:       Verlo
  * Plugin URI:        https://exeve.global/
  * Description:       Verlo plans, writes, and optimizes SEO content for your site, end to end. It builds a knowledge graph of your existing content, designs a topical map of pillars and planned articles, turns each into a content brief, and generates publish-ready, human-quality draft articles, complete with on-page SEO, internal links, and stock images, for your review before publishing.
- * Version:           1.0.9
+ * Version:           1.1.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            EXEVE
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'VERLO_VERSION', '1.0.9' );
+define( 'VERLO_VERSION', '1.1.0' );
 define( 'VERLO_FILE', __FILE__ );
 define( 'VERLO_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VERLO_URL', plugin_dir_url( __FILE__ ) );
@@ -173,12 +173,12 @@ function verlo_env_admin_notice() {
 	if ( ! Verlo_Env::is_assisted() ) { return; }
 
 	$recheck = wp_nonce_url( add_query_arg( 'verlo_recheck_env', 1 ), 'verlo_recheck_env' );
-	echo '<div class=”notice notice-warning”><p><strong>Verlo: background tasks are being blocked on this site.</strong> '
-		. 'Articles and other generation steps still complete (the open admin tab finishes the work), but they start slower and you may see a “Run now” button. '
-		. 'This is usually a security/firewall plugin (e.g. WP Hide, Wordfence) or a host setting blocking WordPress “loopback” requests and/or WP-Cron.</p>'
+	echo '<div class="notice notice-warning"><p><strong>Verlo: background tasks are being blocked on this site.</strong> '
+		. 'Articles and other generation steps still complete (the open admin tab finishes the work), but they start slower and you may see a "Run now" button. '
+		. 'This is usually a security/firewall plugin (e.g. WP Hide, Wordfence) or a host setting blocking WordPress "loopback" requests and/or WP-Cron.</p>'
 		. '<p>To make Verlo fully automatic, allow internal requests to <code>admin-post.php</code> and <code>wp-cron.php</code> for this site in your security plugin '
 		. '(and approve outbound requests to the Verlo server for the Verlo plugin). '
-		. '<a href=”' . esc_url( $recheck ) . '” class=”button button-small”>Re-check now</a></p></div>';
+		. '<a href="' . esc_url( $recheck ) . '" class="button button-small">Re-check now</a></p></div>';
 }
 
 /**

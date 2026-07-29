@@ -72,6 +72,19 @@ class Verlo_Text {
 		);
 		// -----------------------------------------------------------------------
 
+		// --- Numbered step/phase/day lead-in pattern ---------------------------
+		// "Step 1 — Choose the Breeder" / "Step 1 – Choose..." -> "Step 1: Choose..."
+		// Headings aren't bold-tagged, so without this they'd fall through to the
+		// generic dash-to-comma rule below and read as "Step 1, Choose the...".
+		// Anchored to the start of a line so it never touches a mid-sentence
+		// "step 1" mention. Must run before the generic catch-all.
+		$text = preg_replace(
+			'/^(\s*(?:Step|Phase|Day|Part|Stage)\s+\d+)' . $sep . $dash . $sep . '/mui',
+			'$1: ',
+			$text
+		);
+		// -----------------------------------------------------------------------
+
 		// Every remaining em/en/bar dash becomes a comma (reads as a natural pause).
 		$text = preg_replace( '/\s*[\x{2013}\x{2014}\x{2015}]\s*/u', ', ', $text );
 
