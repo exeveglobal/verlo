@@ -149,6 +149,7 @@ class Verlo_Brief {
 	 */
 	public static function blank() {
 		return array(
+			'brief_id'       => '', // server-side brief_records id, sent back on the article job
 			'keyword'        => '',
 			'intent'         => 'informational',
 			'pillar'         => '',
