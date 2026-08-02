@@ -380,7 +380,7 @@ class Verlo_Brief_Admin {
 				<div style="margin:8px 0 16px;padding:18px 20px;border:1px solid #c3d9ec;border-radius:10px;background:linear-gradient(180deg,#f3f9ff,#fff);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
 					<div>
 						<div style="font-size:15px;font-weight:600;color:#1d2327;">Ready to write the article</div>
-						<div class=”description” style=”margin-top:2px;”>Generates a full draft from this brief into the “<?php echo esc_html( $b['pillar'] ); ?>” category. Saved as a draft for your review. Never auto-published.</div>
+						<div class="description" style="margin-top:2px;">Generates a full draft from this brief into the “<?php echo esc_html( $b['pillar'] ); ?>” category. Saved as a draft for your review. Never auto-published.</div>
 					</div>
 					<form method="post" action="<?php echo esc_url( $url ); ?>" style="margin:0;">
 						<input type="hidden" name="action" value="verlo_brief_generate_article" />
