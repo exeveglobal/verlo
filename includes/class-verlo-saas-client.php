@@ -58,6 +58,14 @@ class Verlo_SaaS_Client {
 			return new WP_Error( 'verlo_plan_limit', $msg );
 		}
 
+		// 402: valid plan, past the included allowance, and the wallet balance
+		// can't cover the overage charge — distinct from a hard plan_limit wall,
+		// this is "top up your wallet", not "upgrade your plan".
+		if ( 402 === (int) $code ) {
+			$msg = isset( $data['message'] ) ? $data['message'] : 'Your Verlo wallet balance is too low. Top up your wallet to continue.';
+			return new WP_Error( 'verlo_payment_required', $msg );
+		}
+
 		if ( (int) $code < 200 || (int) $code >= 300 ) {
 			$msg = isset( $data['message'] ) ? $data['message'] : ( 'Request failed (HTTP ' . (int) $code . ').' );
 			return new WP_Error( 'verlo_request_failed', $msg );

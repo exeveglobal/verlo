@@ -255,7 +255,7 @@ class Verlo_Strategist {
 			return $out;
 		};
 
-		return Verlo_Text::humanize_deep( array(
+		$brief = Verlo_Text::humanize_deep( array(
 			'keyword'         => $article['keyword'],
 			'intent'          => $article['intent'],
 			'pillar'          => $article['pillar'],
@@ -270,6 +270,14 @@ class Verlo_Strategist {
 			'word_count'      => max( 300, (int) ( $res['word_count'] ?? 1500 ) ),
 			'voice_note'      => sanitize_textarea_field( $res['voice_note'] ?? '' ),
 		) );
+
+		// Server-side brief_records id — kept out of the humanize() pass above
+		// since it's an opaque identifier, not prose. Round-tripped unchanged on
+		// the article job so the SaaS can convert this brief atomically
+		// (verlo-pricing-spec-v1.md 3.2).
+		$brief['brief_id'] = sanitize_text_field( $res['brief_id'] ?? '' );
+
+		return $brief;
 	}
 
 	public static function stats() {

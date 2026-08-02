@@ -484,6 +484,14 @@ class Verlo_Generator {
 			'word_target' => (int) ( $brief['word_count'] ?? 1500 ),
 		);
 
+		// Send the server-side brief id back, if we have one, so the SaaS can
+		// convert this brief out of the unconverted-cap pool atomically with
+		// creating the article job (verlo-pricing-spec-v1.md 3.2/5.2). Briefs
+		// generated before this field existed simply have none to send.
+		if ( ! empty( $brief['brief_id'] ) ) {
+			$payload['brief_id'] = (string) $brief['brief_id'];
+		}
+
 		$result = Verlo_SaaS_Client::run_job( 'article', $payload, 180 );
 		if ( is_wp_error( $result ) ) { return $result; }
 
