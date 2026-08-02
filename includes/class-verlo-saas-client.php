@@ -18,6 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 class Verlo_SaaS_Client {
 
 	const DEFAULT_SAAS_URL = 'https://api.verlohub.com';
+	const DEFAULT_DASHBOARD_URL = 'https://app.verlohub.com';
 
 	/**
 	 * Submit a job. Returns job_id (string) or WP_Error.
@@ -197,6 +198,51 @@ class Verlo_SaaS_Client {
 	}
 
 	/**
+	 * True if a WP_Error from request_job()/run_job() is a billing-related
+	 * stop (plan cap reached, or overage the wallet balance can't cover) —
+	 * the two cases where the caller should point the user at the dashboard's
+	 * billing page instead of just showing the raw error text.
+	 */
+	public static function is_billing_error( $error ) {
+		if ( ! is_wp_error( $error ) ) { return false; }
+		return in_array( $error->get_error_code(), array( 'verlo_plan_limit', 'verlo_payment_required' ), true );
+	}
+
+	/**
+	 * Search for stock photos via the SaaS (a fast passthrough to Pexels using
+	 * a shared server-side key — not a queued job). Returns the SaaS's photo
+	 * list (see verlo-saas's normalised shape) or WP_Error. Callers (only
+	 * Verlo_Images::search()) already treat any WP_Error as "no photos" —
+	 * image work must never break article generation.
+	 */
+	public static function search_images( $query, $count = 1 ) {
+		$token = Verlo_Auth::token();
+		if ( is_wp_error( $token ) ) { return $token; }
+
+		$url      = self::base_url() . '/v1/images/search';
+		$response = wp_remote_post( $url, array(
+			'timeout' => 20,
+			'headers' => array(
+				'Content-Type'  => 'application/json',
+				'Authorization' => 'Bearer ' . $token,
+			),
+			'body' => wp_json_encode( array( 'query' => $query, 'count' => max( 1, (int) $count ) ) ),
+		) );
+
+		if ( is_wp_error( $response ) ) {
+			return self::transport_error( $response );
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		if ( (int) $code < 200 || (int) $code >= 300 ) {
+			return new WP_Error( 'verlo_images_failed', 'Image search failed (HTTP ' . (int) $code . ').' );
+		}
+
+		$data = json_decode( wp_remote_retrieve_body( $response ), true );
+		return isset( $data['photos'] ) && is_array( $data['photos'] ) ? $data['photos'] : array();
+	}
+
+	/**
 	 * Base URL for all SaaS requests.
 	 * Override via VERLO_SAAS_URL constant (for local dev) or settings.
 	 */
@@ -204,9 +250,19 @@ class Verlo_SaaS_Client {
 		if ( defined( 'VERLO_SAAS_URL' ) ) {
 			return rtrim( VERLO_SAAS_URL, '/' );
 		}
-		$s = verlo_get_settings();
-		$url = isset( $s['saas_url'] ) ? trim( $s['saas_url'] ) : '';
-		return rtrim( $url ?: self::DEFAULT_SAAS_URL, '/' );
+		return self::DEFAULT_SAAS_URL;
+	}
+
+	/**
+	 * Base URL for the customer dashboard (used for the "Connect with Verlo"
+	 * redirect flow and quota/upgrade CTAs). Override via VERLO_DASHBOARD_URL
+	 * constant for local dev, same pattern as base_url().
+	 */
+	public static function dashboard_url() {
+		if ( defined( 'VERLO_DASHBOARD_URL' ) ) {
+			return rtrim( VERLO_DASHBOARD_URL, '/' );
+		}
+		return self::DEFAULT_DASHBOARD_URL;
 	}
 
 	/** Map transport-level errors to user-friendly WP_Error. */

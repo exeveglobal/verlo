@@ -31,10 +31,12 @@ class Verlo_Map_Admin {
 
 	public static function render() {
 		if ( ! current_user_can( 'manage_options' ) ) { return; }
+		$connected = Verlo_Auth::is_connected();
 		$map      = Verlo_Topical_Map::get();
 		$stats    = Verlo_Topical_Map::stats();
-		$notice   = isset( $_GET['verlo_notice'] ) ? sanitize_text_field( wp_unslash( $_GET['verlo_notice'] ) ) : '';
-		$is_error = isset( $_GET['verlo_error'] );
+		$notice       = isset( $_GET['verlo_notice'] ) ? sanitize_text_field( wp_unslash( $_GET['verlo_notice'] ) ) : '';
+		$is_error     = isset( $_GET['verlo_error'] );
+		$link_billing = isset( $_GET['verlo_link_billing'] );
 		$url      = admin_url( 'admin-post.php' );
 		$draft    = ( 'draft' === $map['status'] );
 		$approved = ( 'approved' === $map['status'] );
@@ -44,7 +46,12 @@ class Verlo_Map_Admin {
 			<p style="margin-top:2px;color:#646970;">Pillars become categories; the articles beneath them are the committed content roadmap. Nothing generates until this map is approved.</p>
 
 			<?php if ( $notice ) : ?>
-				<div class="notice <?php echo $is_error ? 'notice-error' : 'notice-success'; ?> is-dismissible"><p><?php echo esc_html( $notice ); ?></p></div>
+				<div class="notice <?php echo $is_error ? 'notice-error' : 'notice-success'; ?> is-dismissible"><p>
+					<?php echo esc_html( $notice ); ?>
+					<?php if ( $link_billing ) : ?>
+						&nbsp;<a href="<?php echo esc_url( Verlo_SaaS_Client::dashboard_url() . '/dashboard/billing' ); ?>" target="_blank" rel="noopener">Open billing →</a>
+					<?php endif; ?>
+				</p></div>
 			<?php endif; ?>
 
 			<div class="notice notice-warning inline" style="margin:14px 0;border-left-color:#dba617;"><p style="margin:.5em 0;">
@@ -93,8 +100,11 @@ class Verlo_Map_Admin {
 						<input type="hidden" name="action" value="verlo_map_generate" />
 						<?php wp_nonce_field( 'verlo_map_generate' ); ?>
 						<?php if ( $approved ) : ?><input type="hidden" name="force" value="1" /><?php endif; ?>
-						<button type="submit" class="button <?php echo $map['pillars'] ? '' : 'button-primary'; ?>" data-verlo-progress="Designing your topical map with Verlo…" data-verlo-phases="map">Generate map with Verlo<?php echo $map['pillars'] ? ' (replace draft)' : ''; ?></button>
+						<button type="submit" class="button <?php echo $map['pillars'] ? '' : 'button-primary'; ?>" data-verlo-progress="Designing your topical map with Verlo…" data-verlo-phases="map" <?php disabled( ! $connected ); ?>>Generate map with Verlo<?php echo $map['pillars'] ? ' (replace draft)' : ''; ?></button>
 					</form>
+					<?php if ( ! $connected ) : ?>
+						<span class="description">Connect your Verlo license first.</span>
+					<?php endif; ?>
 					<?php if ( $draft ) : ?>
 						<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline">
 							<input type="hidden" name="action" value="verlo_map_recheck" />
@@ -256,7 +266,7 @@ class Verlo_Map_Admin {
 		if ( $force ) { Verlo_Topical_Map::reopen(); }
 		$res = Verlo_Topical_Map::generate();
 		if ( is_wp_error( $res ) ) {
-			self::redirect( 'Map generation failed: ' . $res->get_error_message(), true );
+			self::redirect( 'Map generation failed: ' . $res->get_error_message(), true, Verlo_SaaS_Client::is_billing_error( $res ) );
 		}
 		self::redirect( 'Draft map generated. Review the pillars below, edit as needed, then Approve.' );
 	}
@@ -333,9 +343,10 @@ class Verlo_Map_Admin {
 		}
 	}
 
-	protected static function redirect( $notice, $is_error = false ) {
+	protected static function redirect( $notice, $is_error = false, $link_billing = false ) {
 		$args = array( 'page' => 'verlo-map', 'verlo_notice' => rawurlencode( $notice ) );
 		if ( $is_error ) { $args['verlo_error'] = 1; }
+		if ( $link_billing ) { $args['verlo_link_billing'] = 1; }
 		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
 		exit;
 	}

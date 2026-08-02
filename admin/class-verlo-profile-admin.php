@@ -14,6 +14,8 @@ class Verlo_Profile_Admin {
 		add_action( 'admin_menu', array( __CLASS__, 'menu' ), 11 );
 		add_action( 'admin_post_verlo_connection', array( __CLASS__, 'handle_connection' ) );
 		add_action( 'admin_post_verlo_disconnect', array( __CLASS__, 'handle_disconnect' ) );
+		add_action( 'admin_post_verlo_connect_start', array( __CLASS__, 'handle_connect_start' ) );
+		add_action( 'admin_post_verlo_connect_complete', array( __CLASS__, 'handle_connect_complete' ) );
 		add_action( 'admin_post_verlo_save_profile', array( __CLASS__, 'handle_save_profile' ) );
 		add_action( 'admin_post_verlo_analyze', array( __CLASS__, 'handle_analyze' ) );
 		add_action( 'admin_post_verlo_export_profile', array( __CLASS__, 'handle_export' ) );
@@ -201,17 +203,17 @@ class Verlo_Profile_Admin {
 							<button type="submit" class="button button-secondary" onclick="return confirm('Disconnect Verlo? Content generation will stop until you reconnect.');">Disconnect</button>
 						</form>
 					<?php else : ?>
-						<p class="verlo-sub">Enter your Verlo license key to activate smart site analysis and article generation.</p>
+						<p class="verlo-sub">Connect your Verlo account — no need to find and paste a license key.</p>
+						<div class="verlo-actions" style="margin-bottom:16px;">
+							<a class="button button-primary button-hero" href="<?php echo esc_url( self::connect_start_url() ); ?>">Connect with Verlo</a>
+						</div>
+						<p class="verlo-sub" style="margin-top:0;">Or enter a license key manually:</p>
 						<form method="post" action="<?php echo esc_url( $url ); ?>">
 							<input type="hidden" name="action" value="verlo_connection" />
 							<?php wp_nonce_field( 'verlo_connection' ); ?>
 							<table class="form-table" role="presentation">
 								<tr class="verlo-field"><th>License key</th><td>
 									<input type="password" name="license_key" value="" autocomplete="off" placeholder="verlo-…" style="max-width:360px;" />
-								</td></tr>
-								<tr class="verlo-field"><th>Server URL <span style="font-weight:400;color:#646970;">(dev)</span></th><td>
-									<input type="text" name="saas_url" value="<?php echo esc_attr( $s['saas_url'] ); ?>" placeholder="leave blank for production" style="max-width:360px;" />
-									<p class="description">Leave blank in production. For local development: <code>http://localhost:3000</code></p>
 								</td></tr>
 							</table>
 							<div class="verlo-actions">
@@ -233,10 +235,6 @@ class Verlo_Profile_Admin {
 							<tr class="verlo-field"><th>Trusted outbound domains</th><td>
 								<textarea name="outbound_domains" rows="3" placeholder="one domain per line, e.g.&#10;akc.org&#10;mayoclinic.org"><?php echo esc_textarea( $s['outbound_domains'] ?? '' ); ?></textarea>
 								<p class="description">Niche-specific sites generated articles may link out to (in addition to Wikipedia and .gov/.edu). Leave blank for universal authorities only.</p>
-							</td></tr>
-							<tr class="verlo-field"><th>Pexels API key</th><td>
-								<input type="password" name="pexels_api_key" value="<?php echo esc_attr( $s['pexels_api_key'] ?? '' ); ?>" autocomplete="off" placeholder="free key from pexels.com/api" />
-								<p class="description">Enables a featured image and in-body stock images. Leave blank to skip images.</p>
 							</td></tr>
 							<tr class="verlo-field"><th>In-body images (max)</th><td>
 								<select name="inline_images">
@@ -346,21 +344,18 @@ class Verlo_Profile_Admin {
 
 	/**
 	 * Handles both the license-key connect form and the settings-only save form.
-	 * When verlo_settings_only=1, only saves outbound_domains/pexels/inline_images.
+	 * When verlo_settings_only=1, only saves outbound_domains/inline_images.
 	 */
 	public static function handle_connection() {
 		self::guard( 'verlo_connection' );
 
 		$domains = sanitize_textarea_field( wp_unslash( $_POST['outbound_domains'] ?? '' ) );
-		$pexels  = sanitize_text_field( wp_unslash( $_POST['pexels_api_key'] ?? '' ) );
 		$inline  = max( 0, min( 3, (int) ( $_POST['inline_images'] ?? 1 ) ) );
-		$saas_url = esc_url_raw( wp_unslash( $_POST['saas_url'] ?? '' ) );
 
 		// Settings-only save (from the Settings card — no license key involved).
 		if ( ! empty( $_POST['verlo_settings_only'] ) ) {
 			$s = verlo_get_settings();
 			$s['outbound_domains'] = $domains;
-			$s['pexels_api_key']   = $pexels;
 			$s['inline_images']    = $inline;
 			update_option( VERLO_OPT_SETTINGS, $s, 'no' );
 			self::redirect( 'Settings saved.' );
@@ -372,11 +367,8 @@ class Verlo_Profile_Admin {
 			self::redirect( 'Enter a license key first.', true );
 		}
 
-		// Persist the saas_url override first so Verlo_Auth::verify() uses it.
 		$s = verlo_get_settings();
-		$s['saas_url']         = $saas_url;
 		$s['outbound_domains'] = $domains;
-		$s['pexels_api_key']   = $pexels;
 		$s['inline_images']    = $inline;
 		update_option( VERLO_OPT_SETTINGS, $s, 'no' );
 
@@ -394,6 +386,63 @@ class Verlo_Profile_Admin {
 		self::guard( 'verlo_disconnect' );
 		Verlo_Auth::disconnect();
 		self::redirect( 'Verlo disconnected.' );
+	}
+
+	/** Nonce-signed link that starts the "Connect with Verlo" redirect flow. */
+	protected static function connect_start_url() {
+		return wp_nonce_url( admin_url( 'admin-post.php?action=verlo_connect_start' ), 'verlo_connect_start' );
+	}
+
+	/**
+	 * Step 1 of the redirect flow: send the browser to the dashboard's
+	 * connect-plugin page. return_url is nonce-signed for THIS admin session
+	 * so the completion request below can't be forged by a crafted link
+	 * pointing at a different site's wp-admin (check_admin_referer there is
+	 * the actual CSRF guard, same as every other admin-post handler here).
+	 */
+	public static function handle_connect_start() {
+		if ( ! current_user_can( 'manage_options' ) || ! check_admin_referer( 'verlo_connect_start' ) ) {
+			wp_die( 'Permission denied.' );
+		}
+
+		$return_url = wp_nonce_url(
+			admin_url( 'admin-post.php?action=verlo_connect_complete' ),
+			'verlo_connect_complete'
+		);
+
+		// Built by hand (not add_query_arg) so return_url's own querystring
+		// (?action=...&_wpnonce=...) is correctly percent-encoded as a single
+		// value rather than merging into the outer query string.
+		$dashboard_url = Verlo_SaaS_Client::dashboard_url() . '/connect-plugin'
+			. '?site_url=' . rawurlencode( home_url() )
+			. '&return_url=' . rawurlencode( $return_url );
+
+		wp_redirect( $dashboard_url );
+		exit;
+	}
+
+	/**
+	 * Step 2: the dashboard redirects back here with a one-time claim token
+	 * after the user authorized the connection. Exchange it for the license
+	 * key and connect exactly as if it had been typed in manually.
+	 */
+	public static function handle_connect_complete() {
+		if ( ! current_user_can( 'manage_options' ) || ! check_admin_referer( 'verlo_connect_complete' ) ) {
+			wp_die( 'Permission denied.' );
+		}
+
+		$token = sanitize_text_field( wp_unslash( $_GET['token'] ?? '' ) );
+		if ( '' === $token ) {
+			self::redirect( 'Connection failed: no token received.', true );
+		}
+
+		$res = Verlo_Auth::connect_via_token( $token );
+		if ( is_wp_error( $res ) ) {
+			self::redirect( 'Connection failed: ' . $res->get_error_message(), true );
+		}
+
+		$plan = isset( $res['plan'] ) ? ucfirst( (string) $res['plan'] ) : 'active';
+		self::redirect( 'Connected! Verlo is active (' . $plan . ' plan).' );
 	}
 
 	public static function handle_save_profile() {

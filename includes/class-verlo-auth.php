@@ -108,6 +108,44 @@ class Verlo_Auth {
 	}
 
 	/**
+	 * Complete the "Connect with Verlo" redirect flow: exchange the one-time
+	 * claim token (handed back by the dashboard after the user authorized the
+	 * connection) for the actual license key, then run it through the exact
+	 * same verify() every manual connection already goes through. Returns the
+	 * full response array or WP_Error.
+	 */
+	public static function connect_via_token( $token ) {
+		$token = trim( (string) $token );
+		if ( '' === $token ) {
+			return new WP_Error( 'verlo_no_token', 'Missing connection token.' );
+		}
+
+		$url      = Verlo_SaaS_Client::base_url() . '/v1/auth/plugin-connect-exchange';
+		$response = wp_remote_post( $url, array(
+			'timeout' => 30,
+			'headers' => array( 'Content-Type' => 'application/json' ),
+			'body'    => wp_json_encode( array( 'token' => $token ) ),
+		) );
+
+		if ( is_wp_error( $response ) ) {
+			return new WP_Error(
+				'verlo_transport',
+				'Could not reach the Verlo server: ' . $response->get_error_message()
+			);
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		$data = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( 200 !== (int) $code || empty( $data['license_key'] ) ) {
+			$msg = isset( $data['message'] ) ? $data['message'] : ( 'Connection failed (HTTP ' . (int) $code . ').' );
+			return new WP_Error( 'verlo_connect_failed', $msg );
+		}
+
+		return self::verify( (string) $data['license_key'] );
+	}
+
+	/**
 	 * Re-verify using the stored license key. Called automatically on token expiry.
 	 */
 	public static function refresh() {
