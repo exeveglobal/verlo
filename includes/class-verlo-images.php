@@ -2,25 +2,23 @@
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 /**
- * Stock image integration via the free Pexels API. Niche-agnostic: it searches
- * by the article's own keyword, so it works on any site. Images are sideloaded
- * into the Media Library, the first becomes the featured image, and any extras
- * are returned as ready-to-insert Gutenberg image blocks.
+ * Stock image integration via Pexels, searched server-side through the Verlo
+ * SaaS (a single shared account-level key, not a per-site key) — niche-agnostic:
+ * it searches by the article's own keyword, so it works on any site. Images
+ * are sideloaded into the Media Library, the first becomes the featured
+ * image, and any extras are returned as ready-to-insert Gutenberg image blocks.
  *
  * Image work never breaks article generation: any failure is caught and the
  * draft is saved without images.
  */
 class Verlo_Images {
 
-	const ENDPOINT = 'https://api.pexels.com/v1/search';
-
-	public static function api_key() {
-		$s = verlo_get_settings();
-		return isset( $s['pexels_api_key'] ) ? trim( (string) $s['pexels_api_key'] ) : '';
-	}
-
+	/**
+	 * Images require an active connection (the search call goes through the
+	 * SaaS) — there's no per-site credential to check anymore.
+	 */
 	public static function is_configured() {
-		return '' !== self::api_key();
+		return Verlo_Auth::is_connected();
 	}
 
 	/**
@@ -35,76 +33,30 @@ class Verlo_Images {
 	}
 
 	/**
-	 * Search Pexels for a query. Returns a list of normalised photo arrays:
-	 * [ 'url' => download src, 'alt' => alt text, 'credit' => 'Photo by X on Pexels',
-	 *   'credit_url' => photographer url ]. Empty array on any failure.
+	 * Search for stock photos via the SaaS (POST /v1/images/search — a fast
+	 * passthrough to Pexels using a shared server-side key, not a queued job).
+	 * Returns a list of normalised photo arrays: [ 'url' => download src,
+	 * 'url_hi' => higher-res src, 'alt' => alt text,
+	 * 'credit' => 'Photo by X on Pexels', 'credit_url' => photographer url ].
+	 * Empty array on any failure — image work must never break generation.
 	 */
 	public static function search( $query, $count = 1 ) {
-		$key = self::api_key();
-		if ( '' === $key || '' === trim( (string) $query ) ) { return array(); }
+		if ( ! self::is_configured() || '' === trim( (string) $query ) ) { return array(); }
 
-		$url = add_query_arg(
-			array(
-				'query'       => rawurlencode( $query ),
-				'per_page'    => max( 1, (int) $count ),
-				'orientation' => 'landscape',
-			),
-			self::ENDPOINT
-		);
+		$photos = Verlo_SaaS_Client::search_images( $query, max( 1, (int) $count ) );
+		if ( is_wp_error( $photos ) ) { return array(); }
 
-		$res = wp_remote_get( $url, array(
-			'headers' => array( 'Authorization' => $key ),
-			'timeout' => 20,
-		) );
-		if ( is_wp_error( $res ) ) { return array(); }
-		if ( 200 !== (int) wp_remote_retrieve_response_code( $res ) ) { return array(); }
-
-		$body = json_decode( wp_remote_retrieve_body( $res ), true );
-		return self::normalise( $body );
-	}
-
-	/**
-	 * Convert a Pexels API response body into our normalised photo list.
-	 * Pure function (no WP/network) so it is unit-testable.
-	 */
-	public static function normalise( $body ) {
+		// The SaaS already returns the exact shape below — just sanitize/coerce
+		// types defensively rather than trusting a remote response blindly.
 		$out = array();
-		if ( empty( $body['photos'] ) || ! is_array( $body['photos'] ) ) { return $out; }
-		foreach ( $body['photos'] as $p ) {
-			// Standard source for in-body images (~940px wide).
-			$src = '';
-			if ( ! empty( $p['src']['large'] ) ) {
-				$src = $p['src']['large'];
-			} elseif ( ! empty( $p['src']['original'] ) ) {
-				$src = $p['src']['original'];
-			} elseif ( ! empty( $p['src']['medium'] ) ) {
-				$src = $p['src']['medium'];
-			}
-			if ( '' === $src ) { continue; }
-
-			// Higher-res source for the featured image / OG sharing. We prefer
-			// Pexels "large" (~940px wide) which comfortably covers the 1200x630
-			// OG target after WordPress generates its sizes, and downloads far
-			// faster than "large2x" (~1880px). Fall back to 2x/original only if
-			// "large" is somehow absent.
-			$hi = '';
-			if ( ! empty( $p['src']['large'] ) ) {
-				$hi = $p['src']['large'];
-			} elseif ( ! empty( $p['src']['large2x'] ) ) {
-				$hi = $p['src']['large2x'];
-			} elseif ( ! empty( $p['src']['original'] ) ) {
-				$hi = $p['src']['original'];
-			} else {
-				$hi = $src;
-			}
-
-			$photographer = isset( $p['photographer'] ) ? $p['photographer'] : '';
+		foreach ( $photos as $p ) {
+			if ( empty( $p['url'] ) ) { continue; }
 			$out[] = array(
-				'url'        => $src,
-				'url_hi'     => $hi,
+				'url'        => (string) $p['url'],
+				'url_hi'     => isset( $p['url_hi'] ) ? (string) $p['url_hi'] : (string) $p['url'],
 				'alt'        => isset( $p['alt'] ) ? (string) $p['alt'] : '',
-				'credit'     => $photographer ? 'Photo by ' . $photographer . ' on Pexels' : 'Photo from Pexels',
-				'credit_url' => isset( $p['photographer_url'] ) ? $p['photographer_url'] : 'https://www.pexels.com',
+				'credit'     => isset( $p['credit'] ) ? (string) $p['credit'] : 'Photo from Pexels',
+				'credit_url' => isset( $p['credit_url'] ) ? (string) $p['credit_url'] : 'https://www.pexels.com',
 			);
 		}
 		return $out;

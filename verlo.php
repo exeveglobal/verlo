@@ -63,9 +63,7 @@ require_once VERLO_DIR . 'admin/class-verlo-log-admin.php';
  */
 function verlo_default_settings() {
 	return array(
-		'saas_url'        => '',   // override for local dev; blank = production default
 		'outbound_domains'=> '',   // extra trusted domains for outbound links (one per line)
-		'pexels_api_key'  => '',   // free key from pexels.com/api; enables featured + in-body images
 		'inline_images'   => 1,    // number of in-body stock images (0-3)
 	);
 }
@@ -146,6 +144,7 @@ function verlo_boot() {
 		// off, then surface a guidance notice when background work is blocked.
 		add_action( 'current_screen', 'verlo_env_admin_check' );
 		add_action( 'admin_notices', 'verlo_env_admin_notice' );
+		add_action( 'admin_notices', 'verlo_connect_admin_notice' );
 	}
 }
 add_action( 'plugins_loaded', 'verlo_boot' );
@@ -179,6 +178,26 @@ function verlo_env_admin_notice() {
 		. '<p>To make Verlo fully automatic, allow internal requests to <code>admin-post.php</code> and <code>wp-cron.php</code> for this site in your security plugin '
 		. '(and approve outbound requests to the Verlo server for the Verlo plugin). '
 		. '<a href="' . esc_url( $recheck ) . '" class="button button-small">Re-check now</a></p></div>';
+}
+
+/**
+ * Site-wide guidance notice: if Verlo isn't connected, say so plainly and
+ * link straight to the connection card, on every Verlo admin page. The
+ * generation buttons are disabled in this state too (see class-verlo-map-admin.php
+ * / class-verlo-brief-admin.php), but a user landing on any Verlo page should
+ * see this before they even get to a disabled button.
+ */
+function verlo_connect_admin_notice() {
+	if ( ! current_user_can( 'manage_options' ) ) { return; }
+	$screen = get_current_screen();
+	if ( ! $screen || false === strpos( (string) $screen->id, 'verlo' ) ) { return; }
+
+	if ( Verlo_Auth::is_connected() ) { return; }
+
+	$connect_url = admin_url( 'admin.php?page=verlo-profile' );
+	echo '<div class="notice notice-warning"><p><strong>Verlo is not connected.</strong> '
+		. 'Connect your license to enable topical map, content brief, and article generation. '
+		. '<a href="' . esc_url( $connect_url ) . '" class="button button-small">Connect Verlo</a></p></div>';
 }
 
 /**

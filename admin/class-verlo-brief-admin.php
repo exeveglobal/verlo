@@ -84,14 +84,20 @@ class Verlo_Brief_Admin {
 
 	public static function render() {
 		if ( ! current_user_can( 'manage_options' ) ) { return; }
-		$notice   = isset( $_GET['verlo_notice'] ) ? sanitize_text_field( wp_unslash( $_GET['verlo_notice'] ) ) : '';
-		$is_error = isset( $_GET['verlo_error'] );
+		$notice       = isset( $_GET['verlo_notice'] ) ? sanitize_text_field( wp_unslash( $_GET['verlo_notice'] ) ) : '';
+		$is_error     = isset( $_GET['verlo_error'] );
+		$link_billing = isset( $_GET['verlo_link_billing'] );
 		?>
 		<div class="wrap verlo-wrap">
 			<h1>Content Briefs</h1>
 			<p style="margin-top:2px;color:#646970;">The spec for each planned article: title, angle, outline, internal links, and intent. Reviewed before anything is written.</p>
 			<?php if ( $notice && '__generating__' !== $notice ) : ?>
-				<div class="notice <?php echo $is_error ? 'notice-error' : 'notice-success'; ?> is-dismissible"><p><?php echo esc_html( $notice ); ?></p></div>
+				<div class="notice <?php echo $is_error ? 'notice-error' : 'notice-success'; ?> is-dismissible"><p>
+					<?php echo esc_html( $notice ); ?>
+					<?php if ( $link_billing ) : ?>
+						&nbsp;<a href="<?php echo esc_url( Verlo_SaaS_Client::dashboard_url() . '/dashboard/billing' ); ?>" target="_blank" rel="noopener">Open billing →</a>
+					<?php endif; ?>
+				</p></div>
 			<?php endif; ?>
 			<?php
 			if ( ! Verlo_Topical_Map::is_approved() ) {
@@ -112,9 +118,10 @@ class Verlo_Brief_Admin {
 	}
 
 	protected static function render_list() {
-		$url   = admin_url( 'admin-post.php' );
-		$stats = Verlo_Strategist::stats();
-		$next  = Verlo_Strategist::pick_next();
+		$url       = admin_url( 'admin-post.php' );
+		$stats     = Verlo_Strategist::stats();
+		$next      = Verlo_Strategist::pick_next();
+		$connected = Verlo_Auth::is_connected();
 		?>
 		<div class="verlo-card" style="margin-top:14px;">
 			<h2>Overview</h2>
@@ -127,11 +134,12 @@ class Verlo_Brief_Admin {
 				<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline">
 					<input type="hidden" name="action" value="verlo_brief_generate_next" />
 					<?php wp_nonce_field( 'verlo_brief_generate_next' ); ?>
-					<button type="submit" class="button button-primary" data-verlo-progress="Writing brief with Verlo…" data-verlo-phases="brief" <?php disabled( ! $next ); ?>>
+					<button type="submit" class="button button-primary" data-verlo-progress="Writing brief with Verlo…" data-verlo-phases="brief" <?php disabled( ! $next || ! $connected ); ?>>
 						<?php echo $next ? 'Generate next brief' : 'All planned articles briefed'; ?>
 					</button>
 				</form>
 				<?php if ( $next ) : ?><span class="description">Next: <strong><?php echo esc_html( $next['keyword'] ); ?></strong></span><?php endif; ?>
+				<?php if ( ! $connected ) : ?><span class="description">Connect your Verlo license first.</span><?php endif; ?>
 			</div>
 		</div>
 
@@ -187,7 +195,7 @@ class Verlo_Brief_Admin {
 										<input type="hidden" name="action" value="verlo_brief_generate" />
 										<input type="hidden" name="article_id" value="<?php echo (int) $a['id']; ?>" />
 										<?php wp_nonce_field( 'verlo_brief_generate' ); ?>
-										<button type="submit" class="button button-small button-primary" data-verlo-progress="Writing brief with Verlo…" data-verlo-phases="brief">Generate brief</button>
+										<button type="submit" class="button button-small button-primary" data-verlo-progress="Writing brief with Verlo…" data-verlo-phases="brief" <?php disabled( ! $connected ); ?>>Generate brief</button>
 									</form>
 								<?php endif; ?>
 							</td>
@@ -274,10 +282,11 @@ class Verlo_Brief_Admin {
 	}
 
 	protected static function render_brief_detail( $aid ) {
-		$b    = Verlo_Brief::get( $aid );
-		$url  = admin_url( 'admin-post.php' );
-		$back = admin_url( 'admin.php?page=verlo-briefs' );
-		$next = Verlo_Strategist::pick_next();
+		$b         = Verlo_Brief::get( $aid );
+		$url       = admin_url( 'admin-post.php' );
+		$back      = admin_url( 'admin.php?page=verlo-briefs' );
+		$next      = Verlo_Strategist::pick_next();
+		$connected = Verlo_Auth::is_connected();
 		?>
 		<p style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
 			<a href="<?php echo esc_url( $back ); ?>">← All briefs</a>
@@ -360,9 +369,11 @@ class Verlo_Brief_Admin {
 							<input type="hidden" name="action" value="verlo_brief_generate_article" />
 							<input type="hidden" name="article_id" value="<?php echo (int) $aid; ?>" />
 							<?php wp_nonce_field( 'verlo_brief_generate_article' ); ?>
-							<button type="submit" class="button" <?php disabled( $generating ); ?> data-verlo-async="1">Regenerate article</button>
+							<button type="submit" class="button" <?php disabled( $generating || ! $connected ); ?> data-verlo-async="1">Regenerate article</button>
 						</form>
-						<span class="description">Nothing is published automatically. Edit and publish the draft in WordPress when you are happy with it.</span>
+						<span class="description">
+							<?php echo ! $connected ? 'Connect your Verlo license first.' : 'Nothing is published automatically. Edit and publish the draft in WordPress when you are happy with it.'; ?>
+						</span>
 					</div>
 				</div>
 			<?php elseif ( ! $generating && ! $just_started ) : ?>
@@ -375,8 +386,9 @@ class Verlo_Brief_Admin {
 						<input type="hidden" name="action" value="verlo_brief_generate_article" />
 						<input type="hidden" name="article_id" value="<?php echo (int) $aid; ?>" />
 						<?php wp_nonce_field( 'verlo_brief_generate_article' ); ?>
-						<button type="submit" class="button button-primary button-hero" data-verlo-async="1">✍ Generate draft article</button>
+						<button type="submit" class="button button-primary button-hero" <?php disabled( ! $connected ); ?> data-verlo-async="1">✍ Generate draft article</button>
 					</form>
+					<?php if ( ! $connected ) : ?><span class="description">Connect your Verlo license first.</span><?php endif; ?>
 				</div>
 			<?php endif; ?>
 
@@ -418,8 +430,9 @@ class Verlo_Brief_Admin {
 					<input type="hidden" name="action" value="verlo_brief_generate" />
 					<input type="hidden" name="article_id" value="<?php echo (int) $aid; ?>" />
 					<?php wp_nonce_field( 'verlo_brief_generate' ); ?>
-					<button type="submit" class="button" data-verlo-progress="Rewriting brief with Verlo…" data-verlo-phases="brief">Regenerate with Verlo</button>
+					<button type="submit" class="button" <?php disabled( ! $connected ); ?> data-verlo-progress="Rewriting brief with Verlo…" data-verlo-phases="brief">Regenerate with Verlo</button>
 				</form>
+				<?php if ( ! $connected ) : ?><span class="description">Connect your Verlo license first.</span><?php endif; ?>
 				<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline" onsubmit="return confirm('Delete this brief?');">
 					<input type="hidden" name="action" value="verlo_brief_delete" />
 					<input type="hidden" name="article_id" value="<?php echo (int) $aid; ?>" />
@@ -576,7 +589,9 @@ class Verlo_Brief_Admin {
 		self::guard( 'verlo_brief_generate' );
 		$aid = (int) ( $_POST['article_id'] ?? 0 );
 		$res = Verlo_Strategist::build_brief( $aid );
-		if ( is_wp_error( $res ) ) { self::redirect( 'Brief failed: ' . $res->get_error_message(), true ); }
+		if ( is_wp_error( $res ) ) {
+			self::redirect( 'Brief failed: ' . $res->get_error_message(), true, Verlo_SaaS_Client::is_billing_error( $res ) );
+		}
 		self::redirect_to_brief( $aid, 'Brief generated. Review and edit below.' );
 	}
 
@@ -585,7 +600,9 @@ class Verlo_Brief_Admin {
 		$next = Verlo_Strategist::pick_next();
 		if ( ! $next ) { self::redirect( 'Every planned article already has a brief.' ); }
 		$res = Verlo_Strategist::build_brief( $next['id'] );
-		if ( is_wp_error( $res ) ) { self::redirect( 'Brief failed: ' . $res->get_error_message(), true ); }
+		if ( is_wp_error( $res ) ) {
+			self::redirect( 'Brief failed: ' . $res->get_error_message(), true, Verlo_SaaS_Client::is_billing_error( $res ) );
+		}
 		self::redirect_to_brief( $next['id'], 'Brief generated for "' . $next['keyword'] . '". Review below.' );
 	}
 
@@ -643,7 +660,7 @@ class Verlo_Brief_Admin {
 			}
 			$res = Verlo_Strategist::build_brief( $next['id'] );
 			if ( is_wp_error( $res ) ) {
-				self::redirect_to_brief( $aid, $prefix . 'Could not start the next brief: ' . $res->get_error_message(), true );
+				self::redirect_to_brief( $aid, $prefix . 'Could not start the next brief: ' . $res->get_error_message(), true, Verlo_SaaS_Client::is_billing_error( $res ) );
 			}
 			self::redirect_to_brief( $next['id'], 'Brief generated for "' . $next['keyword'] . '". Review below.' );
 		}
@@ -668,7 +685,7 @@ class Verlo_Brief_Admin {
 		$aid = (int) ( $_POST['article_id'] ?? 0 );
 		$res = Verlo_Generator::queue_draft( $aid );
 		if ( is_wp_error( $res ) ) {
-			self::redirect_to_brief( $aid, 'Could not start generation: ' . $res->get_error_message(), true );
+			self::redirect_to_brief( $aid, 'Could not start generation: ' . $res->get_error_message(), true, Verlo_SaaS_Client::is_billing_error( $res ) );
 		}
 		// Return immediately; the brief page shows a live progress state and
 		// polls for completion, so the browser never waits on the API call.
@@ -681,20 +698,22 @@ class Verlo_Brief_Admin {
 		}
 	}
 
-	protected static function redirect( $notice, $is_error = false ) {
+	protected static function redirect( $notice, $is_error = false, $link_billing = false ) {
 		$args = array( 'page' => 'verlo-briefs', 'verlo_notice' => rawurlencode( $notice ) );
 		if ( $is_error ) { $args['verlo_error'] = 1; }
+		if ( $link_billing ) { $args['verlo_link_billing'] = 1; }
 		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
 		exit;
 	}
 
-	protected static function redirect_to_brief( $aid, $notice, $is_error = false ) {
+	protected static function redirect_to_brief( $aid, $notice, $is_error = false, $link_billing = false ) {
 		$args = array(
 			'page'         => 'verlo-briefs',
 			'verlo_brief'  => (int) $aid,
 			'verlo_notice' => rawurlencode( $notice ),
 		);
 		if ( $is_error ) { $args['verlo_error'] = 1; }
+		if ( $link_billing ) { $args['verlo_link_billing'] = 1; }
 		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
 		exit;
 	}
