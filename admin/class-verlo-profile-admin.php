@@ -366,6 +366,13 @@ class Verlo_Profile_Admin {
 		if ( '' === $license_key ) {
 			self::redirect( 'Enter a license key first.', true );
 		}
+		// Verlo keys always look like VERLO-XXXXXX-XXXXXX-XXXXXX-XXXXXX (see
+		// generateLicenseKey() in verlo-saas). Reject anything else locally —
+		// no reason to spend a network round trip telling someone their pasted
+		// value isn't a key at all.
+		if ( ! preg_match( '/^VERLO(-[0-9A-F]{6}){4}$/i', $license_key ) ) {
+			self::redirect( 'That doesn\'t look like a Verlo license key. Copy it from your dashboard\'s License Keys page — it looks like VERLO-XXXXXX-XXXXXX-XXXXXX-XXXXXX.', true );
+		}
 
 		$s = verlo_get_settings();
 		$s['outbound_domains'] = $domains;
@@ -427,8 +434,20 @@ class Verlo_Profile_Admin {
 	 * key and connect exactly as if it had been typed in manually.
 	 */
 	public static function handle_connect_complete() {
-		if ( ! current_user_can( 'manage_options' ) || ! check_admin_referer( 'verlo_connect_complete' ) ) {
+		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( 'Permission denied.' );
+		}
+		// A plain check_admin_referer() here would wp_die() on a bad/expired
+		// nonce with WordPress's generic "The link you followed has expired"
+		// page — a dead end with no way back into the plugin, and no chance
+		// to explain what actually happened. This round trip goes out to the
+		// dashboard and back, so a stale nonce (an old tab, a slow return
+		// trip, a session that rotated in between) is a real, recoverable
+		// case, not just an attack to reject. Verify the nonce ourselves and
+		// send the user back to our own screen with a clear next step instead.
+		$nonce = sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ?? '' ) );
+		if ( ! wp_verify_nonce( $nonce, 'verlo_connect_complete' ) ) {
+			self::redirect( 'Connection failed: this link has expired. Click "Connect with Verlo" again to retry.', true );
 		}
 
 		$token = sanitize_text_field( wp_unslash( $_GET['token'] ?? '' ) );

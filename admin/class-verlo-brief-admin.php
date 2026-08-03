@@ -535,6 +535,19 @@ class Verlo_Brief_Admin {
 				if(sp){ sp.style.display = 'none'; }
 			}
 
+			// A poll's request can run the job synchronously and take well over a
+			// minute — long enough that a reverse proxy in front of PHP can cut
+			// the connection before PHP itself is done (PHP keeps running
+			// server-side either way, orphaned from that one request). When that
+			// happens the fetch below fails even though generation completes
+			// moments later, and normally the NEXT poll would just pick up the
+			// finished state — but on some hosts that hand-off doesn't happen
+			// reliably. A handful of consecutive failures is a strong enough
+			// signal to fall back to an actual page load, which always reads
+			// the real current state fresh.
+			var consecutiveFailures = 0;
+			var MAX_CONSECUTIVE_FAILURES = 4;
+
 			function poll(force){
 				if(finished) return;
 				if(inflight && !force) return;   // don't stack long self-heal runs
@@ -546,11 +559,26 @@ class Verlo_Brief_Admin {
 					.then(function(res){
 						inflight = false;
 						if(!res || !res.success){ return; }
+						consecutiveFailures = 0;
 						var d = res.data || {};
 						if(d.reload || d.state === 'done'){ finish(); }
 						else if(d.state === 'error'){ showError(d.message); }
 					})
-					.catch(function(){ inflight = false; /* transient; keep polling */ });
+					.catch(function(){
+						inflight = false;
+						consecutiveFailures++;
+						if(!finished && consecutiveFailures >= MAX_CONSECUTIVE_FAILURES){
+							// Don't assume success like finish() does — just reload
+							// the exact current page. The server re-checks real
+							// status on every load regardless of this polling UI,
+							// so this correctly shows the finished draft if the
+							// orphaned generation completed, or re-enters polling
+							// cleanly if it's genuinely still running.
+							finished = true;
+							clearInterval(roll); clearInterval(timer); if(elapsedTick) clearInterval(elapsedTick);
+							window.location.reload();
+						}
+					});
 			}
 			// Poll frequently. A poll may itself run the job synchronously if the
 			// background worker was blocked, so requests can be long — inflight
