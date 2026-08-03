@@ -63,10 +63,28 @@ class Verlo_Images {
 	}
 
 	/**
+	 * Restricts sideload() to the known Pexels CDN — download_url() (unlike
+	 * wp_safe_remote_get()) does not block private/reserved IPs, so without
+	 * this check a compromised or MITM'd SaaS response could point the site's
+	 * own server at an internal URL. $image_url is always SaaS-supplied today,
+	 * not directly user-controlled, so this is defense-in-depth for that trust
+	 * boundary rather than a fix for a reachable bug.
+	 */
+	private static function is_allowed_image_host( $image_url ) {
+		$parts = wp_parse_url( (string) $image_url );
+		if ( empty( $parts['scheme'] ) || empty( $parts['host'] ) ) { return false; }
+		if ( 'https' !== $parts['scheme'] ) { return false; }
+		$host = strtolower( $parts['host'] );
+		return 'pexels.com' === $host || substr( $host, -( strlen( '.pexels.com' ) ) ) === '.pexels.com';
+	}
+
+	/**
 	 * Sideload a remote image into the Media Library, attached to $post_id.
 	 * Returns [ 'id' => attachment_id, 'url' => attachment_url ] or null.
 	 */
 	public static function sideload( $image_url, $post_id, $alt, $credit, $credit_url ) {
+		if ( ! self::is_allowed_image_host( $image_url ) ) { return null; }
+
 		if ( ! function_exists( 'media_handle_sideload' ) ) {
 			require_once ABSPATH . 'wp-admin/includes/file.php';
 			require_once ABSPATH . 'wp-admin/includes/media.php';

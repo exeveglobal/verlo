@@ -248,27 +248,41 @@ class Verlo_Generator {
 		// running, or they double-submitted), refuse the second run so we never
 		// create a duplicate post or double-charge the API.
 		$lock_key = 'verlo_gen_lock_' . (int) $article_id;
-		if ( false === self::acquire_lock( $lock_key ) ) {
+		$lock_token = self::acquire_lock( $lock_key );
+		if ( false === $lock_token ) {
 			return new WP_Error(
 				'verlo_in_progress',
 				'This article is already being generated (started moments ago). Please wait for it to finish before trying again.'
 			);
 		}
 
-		$result = self::do_generate_draft( $article_id, $brief );
-
-		self::release_lock( $lock_key );
+		// try/finally guarantees this specific acquisition is always released
+		// under its own token, however do_generate_draft() exits (normal
+		// return, WP_Error, or an uncaught throwable) — so a stale-lock
+		// reclaim by another worker can never have its lock deleted out from
+		// under it by this call finishing late.
+		try {
+			$result = self::do_generate_draft( $article_id, $brief );
+		} finally {
+			self::release_lock( $lock_key, $lock_token );
+		}
 		return $result;
 	}
 
-	/** Lock TTL in seconds — just longer than the longest single generation
-	 * (the API call uses a 120s client timeout), so a worker that genuinely
-	 * died releases the lock automatically shortly after. */
-	const LOCK_TTL = 150;
+	/** Lock TTL in seconds. Must comfortably exceed the true worst-case hold
+	 * time, not just the AI call: write_article() can run up to ~180s
+	 * (Verlo_SaaS_Client::run_job timeout) plus up to ~30s to submit the job,
+	 * and apply_to_post() afterward sideloads up to 4 images sequentially at
+	 * up to 30s each (class-verlo-images.php). A TTL shorter than that lets
+	 * the WP-Cron fallback or poll-driven self-heal "steal" a lock from a
+	 * worker that's still legitimately running, producing a duplicate paid
+	 * API call and a duplicate draft post — this happened at the previous
+	 * 150s value. 400s leaves real headroom above the ~330s worst case. */
+	const LOCK_TTL = 400;
 
 	/**
-	 * Acquire a short-lived generation lock. Returns false if a lock is
-	 * already held and fresh.
+	 * Acquire a short-lived generation lock. Returns a random owner token on
+	 * success, or false if a lock is already held and fresh.
 	 *
 	 * Uses add_option() rather than get_transient()/set_transient() as the
 	 * mutex primitive: the latter is a check-then-act race (get, then set, as
@@ -278,32 +292,66 @@ class Verlo_Generator {
 	 * duplicate draft posts. add_option() is atomic because wp_options has a
 	 * UNIQUE key on option_name — a concurrent second INSERT for the same
 	 * name simply fails, giving a real test-and-set.
+	 *
+	 * The stored value is "{timestamp}|{token}". The token lets release_lock()
+	 * do a compare-and-delete instead of an unconditional delete, so a worker
+	 * that started before the TTL expired and only finishes afterward can't
+	 * delete the *next* worker's lock when it finally calls release_lock().
 	 */
 	protected static function acquire_lock( $key ) {
 		$option = '_verlo_lock_' . $key;
-		if ( add_option( $option, time(), '', 'no' ) ) {
-			return true;
+		$token  = wp_generate_password( 12, false );
+
+		if ( add_option( $option, time() . '|' . $token, '', 'no' ) ) {
+			return $token;
 		}
 
-		// Lock exists — reclaim only if stale (holder died mid-generation).
-		// Losing the race to reclaim a stale lock just means the other
-		// reclaimer wins; it doesn't risk a duplicate post, since whichever
-		// process wins re-reads the brief fresh before writing.
-		$held_at = (int) get_option( $option, 0 );
+		// Lock exists — reclaim only if stale (holder died mid-generation, or
+		// is still running well past a sane worst case). Losing the race to
+		// reclaim a stale lock just means the other reclaimer wins; it doesn't
+		// risk a duplicate post, since whichever process wins re-reads the
+		// brief fresh before writing.
+		$held_at = self::lock_held_at( $option );
 		if ( $held_at && ( time() - $held_at ) > self::LOCK_TTL ) {
-			update_option( $option, time(), 'no' );
-			return true;
+			update_option( $option, time() . '|' . $token, 'no' );
+			return $token;
 		}
 		return false;
 	}
 
 	protected static function lock_held( $key ) {
-		$held_at = (int) get_option( '_verlo_lock_' . $key, 0 );
+		$held_at = self::lock_held_at( '_verlo_lock_' . $key );
 		return $held_at && ( time() - $held_at ) <= self::LOCK_TTL;
 	}
 
-	protected static function release_lock( $key ) {
-		delete_option( '_verlo_lock_' . $key );
+	/** Parses the "{timestamp}|{token}" option value; returns the timestamp
+	 * (0 if unset) regardless of token. Shared by acquire_lock()/lock_held(). */
+	private static function lock_held_at( $option ) {
+		$raw = (string) get_option( $option, '' );
+		if ( '' === $raw ) { return 0; }
+		return (int) strtok( $raw, '|' );
+	}
+
+	/**
+	 * Release a lock. When $token is given, only deletes if it still matches
+	 * the token currently stored (compare-and-delete) — a worker that lost
+	 * its lock to a stale-reclaim must not be able to delete the reclaimer's
+	 * active lock out from under it. When $token is omitted, deletes
+	 * unconditionally — used only as a last-resort defensive cleanup where no
+	 * token is available (see the fatal-error catch in run_pending()).
+	 */
+	protected static function release_lock( $key, $token = null ) {
+		$option = '_verlo_lock_' . $key;
+		if ( null === $token ) {
+			delete_option( $option );
+			return;
+		}
+		$raw = (string) get_option( $option, '' );
+		if ( '' === $raw ) { return; }
+		$parts = explode( '|', $raw, 2 );
+		if ( isset( $parts[1] ) && hash_equals( $parts[1], $token ) ) {
+			delete_option( $option );
+		}
 	}
 
 	/**

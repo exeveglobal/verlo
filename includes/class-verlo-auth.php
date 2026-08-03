@@ -95,9 +95,10 @@ class Verlo_Auth {
 		update_option( self::OPT_FEATURES,   $data['features'] ?? array(),         'no' );
 		update_option( self::OPT_EXPIRES_AT, strtotime( $data['expires_at'] ?? '' ) ?: 0, 'no' );
 
-		// Store license key (base64 only — not encryption, but avoids plaintext in DB view).
-		// Purpose: auto-refresh when token expires without asking user to re-enter the key.
-		update_option( self::OPT_LK, base64_encode( $license_key ), 'no' );
+		// Store license key encrypted at rest where possible (see
+		// encrypt_license_key() below). Purpose: auto-refresh when the token
+		// expires without asking the user to re-enter the key.
+		update_option( self::OPT_LK, self::encrypt_license_key( $license_key ), 'no' );
 
 		Verlo_Log::info( 'auth.verified', 'Verlo connected', array(
 			'site_id' => $data['site_id'] ?? '',
@@ -153,8 +154,59 @@ class Verlo_Auth {
 		if ( '' === $lk_enc ) {
 			return new WP_Error( 'verlo_no_key', 'No license key stored. Please reconnect Verlo.' );
 		}
-		$license_key = base64_decode( $lk_enc );
+		$license_key = self::decrypt_license_key( $lk_enc );
+		if ( '' === $license_key ) {
+			return new WP_Error( 'verlo_no_key', 'Stored license key could not be read. Please reconnect Verlo.' );
+		}
 		return self::verify( $license_key );
+	}
+
+	/**
+	 * Encrypts the license key with a per-site key derived from wp_salt(),
+	 * so a leaked DB backup or another plugin reading wp_options can't
+	 * trivially recover it the way a plain base64 encoding could. Falls back
+	 * to the previous base64-only encoding if the openssl extension isn't
+	 * available — WordPress has no stronger secret-storage primitive to
+	 * reach for here, so this is the best available improvement, not a claim
+	 * of airtight secrecy against someone who already has DB *and* code
+	 * access on the same box.
+	 */
+	private static function encrypt_license_key( $license_key ) {
+		if ( ! function_exists( 'openssl_encrypt' ) ) {
+			return 'b64:' . base64_encode( $license_key );
+		}
+		$key = hash( 'sha256', wp_salt( 'auth' ), true );
+		$iv  = random_bytes( 16 );
+		$ct  = openssl_encrypt( $license_key, 'aes-256-cbc', $key, OPENSSL_RAW_DATA, $iv );
+		if ( false === $ct ) {
+			return 'b64:' . base64_encode( $license_key );
+		}
+		return 'enc1:' . base64_encode( $iv . $ct );
+	}
+
+	/**
+	 * Reverses encrypt_license_key(), and also reads the plain-base64 format
+	 * used before this was added (no prefix) so already-connected sites keep
+	 * working without needing to reconnect. Returns '' on any failure.
+	 */
+	private static function decrypt_license_key( $stored ) {
+		if ( 0 === strpos( $stored, 'enc1:' ) ) {
+			if ( ! function_exists( 'openssl_decrypt' ) ) { return ''; }
+			$raw = base64_decode( substr( $stored, 5 ) );
+			if ( false === $raw || strlen( $raw ) < 17 ) { return ''; }
+			$iv  = substr( $raw, 0, 16 );
+			$ct  = substr( $raw, 16 );
+			$key = hash( 'sha256', wp_salt( 'auth' ), true );
+			$pt  = openssl_decrypt( $ct, 'aes-256-cbc', $key, OPENSSL_RAW_DATA, $iv );
+			return false === $pt ? '' : $pt;
+		}
+		if ( 0 === strpos( $stored, 'b64:' ) ) {
+			$pt = base64_decode( substr( $stored, 4 ) );
+			return false === $pt ? '' : $pt;
+		}
+		// Legacy value from before this change: plain base64, no prefix.
+		$pt = base64_decode( $stored );
+		return false === $pt ? '' : $pt;
 	}
 
 	/** True if a token is stored and not expired. */
