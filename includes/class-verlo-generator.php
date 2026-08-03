@@ -154,7 +154,7 @@ class Verlo_Generator {
 		// is running — even if status says 'running', that was left by a worker
 		// that has since died — so we take over now rather than waiting out a
 		// fixed timeout. The lock itself prevents any duplicate paid API call.
-		if ( false !== get_transient( 'verlo_gen_lock_' . $article_id ) ) {
+		if ( self::lock_held( 'verlo_gen_lock_' . $article_id ) ) {
 			return 'locked_busy';
 		}
 
@@ -261,24 +261,49 @@ class Verlo_Generator {
 		return $result;
 	}
 
+	/** Lock TTL in seconds — just longer than the longest single generation
+	 * (the API call uses a 120s client timeout), so a worker that genuinely
+	 * died releases the lock automatically shortly after. */
+	const LOCK_TTL = 150;
+
 	/**
-	 * Acquire a short-lived generation lock using an autoload-off transient as
-	 * a mutex. Returns false if a lock is already held. The TTL is just longer
-	 * than the longest single generation (the API call uses a 120s client
-	 * timeout), so a worker that genuinely died releases the lock automatically
-	 * shortly after, but a live worker mid-call keeps it — preventing two
-	 * requests from both calling the paid API for the same article.
+	 * Acquire a short-lived generation lock. Returns false if a lock is
+	 * already held and fresh.
+	 *
+	 * Uses add_option() rather than get_transient()/set_transient() as the
+	 * mutex primitive: the latter is a check-then-act race (get, then set, as
+	 * two separate calls), so the loopback worker, the WP-Cron fallback, and
+	 * the poll-driven self-heal could all observe "no lock" in the same
+	 * instant and all call the paid API for the same article, producing
+	 * duplicate draft posts. add_option() is atomic because wp_options has a
+	 * UNIQUE key on option_name — a concurrent second INSERT for the same
+	 * name simply fails, giving a real test-and-set.
 	 */
 	protected static function acquire_lock( $key ) {
-		if ( false !== get_transient( $key ) ) {
-			return false;
+		$option = '_verlo_lock_' . $key;
+		if ( add_option( $option, time(), '', 'no' ) ) {
+			return true;
 		}
-		set_transient( $key, time(), 150 );
-		return true;
+
+		// Lock exists — reclaim only if stale (holder died mid-generation).
+		// Losing the race to reclaim a stale lock just means the other
+		// reclaimer wins; it doesn't risk a duplicate post, since whichever
+		// process wins re-reads the brief fresh before writing.
+		$held_at = (int) get_option( $option, 0 );
+		if ( $held_at && ( time() - $held_at ) > self::LOCK_TTL ) {
+			update_option( $option, time(), 'no' );
+			return true;
+		}
+		return false;
+	}
+
+	protected static function lock_held( $key ) {
+		$held_at = (int) get_option( '_verlo_lock_' . $key, 0 );
+		return $held_at && ( time() - $held_at ) <= self::LOCK_TTL;
 	}
 
 	protected static function release_lock( $key ) {
-		delete_transient( $key );
+		delete_option( '_verlo_lock_' . $key );
 	}
 
 	/**
