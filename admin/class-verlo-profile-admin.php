@@ -144,6 +144,13 @@ class Verlo_Profile_Admin {
 		.verlo-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px;}
 		.verlo-meta{color:#646970;font-size:12px;margin-top:10px;}
 		.verlo-card-full{margin-top:18px;}
+		.verlo-alert{display:flex;align-items:flex-start;gap:14px;padding:18px 20px;border-radius:10px;margin:16px 0 18px;font-size:14px;line-height:1.55;}
+		.verlo-alert-error{background:#fdf1f1;border:1.5px solid #e6a3a3;box-shadow:0 1px 3px rgba(180,40,40,.08);}
+		.verlo-alert-icon{font-size:22px;line-height:1;flex-shrink:0;}
+		.verlo-alert-body{flex:1;}
+		.verlo-alert-title{display:block;font-weight:700;color:#8a1f1f;margin-bottom:3px;font-size:14px;}
+		.verlo-alert-body p{margin:0;color:#5c1c1c;font-weight:500;}
+		.verlo-alert-body a{font-weight:600;}
 		';
 		wp_register_style( 'verlo-admin', false, array(), VERLO_VERSION );
 		wp_enqueue_style( 'verlo-admin' );
@@ -167,14 +174,26 @@ class Verlo_Profile_Admin {
 			<h1>Site Strategy Profile</h1>
 			<p style="margin-top:2px;color:#646970;">The one-time configuration that drives keyword, tone, intent, and structure decisions for this site.</p>
 
-			<?php if ( $notice ) : ?>
-				<div class="notice <?php echo $is_error ? 'notice-error' : 'notice-success'; ?> is-dismissible">
-					<p>
-						<?php echo esc_html( $notice ); ?>
-						<?php if ( $link_kg ) : ?>
-							&nbsp;<a href="<?php echo esc_url( $kg_url ); ?>">Open the Knowledge Graph page to build it now →</a>
-						<?php endif; ?>
-					</p>
+			<?php if ( $notice && $is_error ) : ?>
+				<!-- Deliberately not the standard thin-bordered .notice-error: this
+				     page also carries other plugins' promotional/status notices
+				     above it, and a genuine connection/action failure needs to
+				     stand out from that noise rather than blend into it. -->
+				<div class="verlo-alert verlo-alert-error" role="alert">
+					<span class="verlo-alert-icon" aria-hidden="true">⚠️</span>
+					<div class="verlo-alert-body">
+						<span class="verlo-alert-title">Something went wrong</span>
+						<p>
+							<?php echo esc_html( $notice ); ?>
+							<?php if ( $link_kg ) : ?>
+								&nbsp;<a href="<?php echo esc_url( $kg_url ); ?>">Open the Knowledge Graph page to build it now →</a>
+							<?php endif; ?>
+						</p>
+					</div>
+				</div>
+			<?php elseif ( $notice ) : ?>
+				<div class="notice notice-success is-dismissible">
+					<p><?php echo esc_html( $notice ); ?></p>
 				</div>
 			<?php endif; ?>
 
@@ -412,9 +431,21 @@ class Verlo_Profile_Admin {
 			wp_die( 'Permission denied.' );
 		}
 
-		$return_url = wp_nonce_url(
-			admin_url( 'admin-post.php?action=verlo_connect_complete' ),
-			'verlo_connect_complete'
+		// wp_nonce_url() runs its result through esc_html(), which turns the
+		// querystring's "&" into "&amp;" — correct for printing straight into
+		// an href, but this URL isn't printed as HTML: it's embedded as a raw
+		// value inside $dashboard_url below. rawurlencode() has no idea "&amp;"
+		// is an HTML entity, so it preserves those literal characters, and the
+		// nonce lands in the request under the key "amp;_wpnonce" instead of
+		// "_wpnonce". $_GET['_wpnonce'] then reads empty every single time, so
+		// verification in handle_connect_complete() always failed — 100% of
+		// connect attempts, not the rare stale-session case the fallback below
+		// was written for. Build the nonce URL directly instead of through
+		// wp_nonce_url()'s HTML-escaped output.
+		$return_url = add_query_arg(
+			'_wpnonce',
+			wp_create_nonce( 'verlo_connect_complete' ),
+			admin_url( 'admin-post.php?action=verlo_connect_complete' )
 		);
 
 		// Built by hand (not add_query_arg) so return_url's own querystring
