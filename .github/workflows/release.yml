@@ -1,0 +1,70 @@
+# ==============================================================================
+# verlo (WordPress plugin) — CI/CD
+# Path in your repo: .github/workflows/release.yml
+#
+# This plugin does NOT deploy to the VPS — it installs on customer WordPress
+# sites. So instead of a server deploy, this workflow builds a clean zip and
+# attaches it to a GitHub Release whenever you push a version tag.
+#
+# Usage: bump the version number in verlo.php's plugin header, then:
+#   git tag v1.2.0 && git push origin v1.2.0
+#
+# Pure PHP plugin, no build step — no VPS secrets, no Node setup needed.
+# ==============================================================================
+name: Release verlo plugin
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+  workflow_dispatch: {}
+
+jobs:
+  build-zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # A UTF-8 BOM in any PHP file gets echoed into every response and breaks
+      # WordPress's JSON/REST output site-wide (caused the invalid_json bug).
+      - name: Check for BOM and stray leading bytes
+        run: |
+          bad=0
+          while IFS= read -r f; do
+            if [ "$(head -c 5 "$f")" != "<?php" ]; then
+              echo "File does not start with <?php (BOM or stray bytes): $f"
+              bad=1
+            fi
+          done < <(find . -name '*.php' -not -path './.git/*')
+          exit $bad
+
+      - name: PHP syntax lint
+        run: |
+          bad=0
+          while IFS= read -r f; do
+            php -l "$f" > /dev/null || bad=1
+          done < <(find . -name '*.php' -not -path './.git/*')
+          exit $bad
+
+      - name: Package plugin zip
+        run: |
+          mkdir -p build/verlo
+          rsync -a \
+            --exclude='.git' --exclude='.github' \
+            --exclude='CLAUDE.md' --exclude='.gitattributes' --exclude='.gitignore' \
+            ./ build/verlo/
+          cd build && zip -r ../verlo.zip verlo && cd ..
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verlo-plugin
+          path: verlo.zip
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: verlo.zip
+          generate_release_notes: true
