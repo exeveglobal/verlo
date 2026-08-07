@@ -87,10 +87,20 @@ class Verlo_Profile_Admin {
 			document.addEventListener('submit', function(e){
 				var form = e.target;
 				if(!form || form.nodeName !== 'FORM') return;
-				var btn = form.querySelector('[data-verlo-progress]');
-				if(!btn) {
-					var active = document.activeElement;
-					if(active && active.hasAttribute && active.hasAttribute('data-verlo-progress')) btn = active;
+				// Must be the button that was actually clicked (e.submitter), not
+				// just any element with the attribute somewhere in the form — a
+				// form can hold multiple submit buttons with different meanings
+				// (e.g. "Save brief" next to "Save & next"), and scanning the
+				// whole form previously showed the WRONG button's progress
+				// message (and rolling phase copy) whenever the plain, synchronous
+				// "Save brief" button was clicked instead of its async sibling.
+				var btn = (e.submitter && e.submitter.hasAttribute && e.submitter.hasAttribute('data-verlo-progress'))
+					? e.submitter
+					: null;
+				if(!btn && document.activeElement && document.activeElement.hasAttribute
+					&& document.activeElement.hasAttribute('data-verlo-progress')) {
+					// Fallback only for browsers without SubmitEvent.submitter support.
+					btn = document.activeElement;
 				}
 				if(!btn) return;
 				if(typeof form.checkValidity === 'function' && !form.checkValidity()) return;

@@ -365,7 +365,7 @@ class Verlo_Brief_Admin {
 						</div>
 					</div>
 					<div class="verlo-actions" style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(0,0,0,.06);">
-						<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline" onsubmit="return confirm('Regenerate the article? It will overwrite the current draft content.');">
+						<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline" data-verlo-confirm-unsaved="1" onsubmit="return confirm('Regenerate the article? It will overwrite the current draft content.');">
 							<input type="hidden" name="action" value="verlo_brief_generate_article" />
 							<input type="hidden" name="article_id" value="<?php echo (int) $aid; ?>" />
 							<?php wp_nonce_field( 'verlo_brief_generate_article' ); ?>
@@ -382,7 +382,7 @@ class Verlo_Brief_Admin {
 						<div style="font-size:15px;font-weight:600;color:#1d2327;">Ready to write the article</div>
 						<div class="description" style="margin-top:2px;">Generates a full draft from this brief into the “<?php echo esc_html( $b['pillar'] ); ?>” category. Saved as a draft for your review. Never auto-published.</div>
 					</div>
-					<form method="post" action="<?php echo esc_url( $url ); ?>" style="margin:0;">
+					<form method="post" action="<?php echo esc_url( $url ); ?>" style="margin:0;" data-verlo-confirm-unsaved="1">
 						<input type="hidden" name="action" value="verlo_brief_generate_article" />
 						<input type="hidden" name="article_id" value="<?php echo (int) $aid; ?>" />
 						<?php wp_nonce_field( 'verlo_brief_generate_article' ); ?>
@@ -619,6 +619,27 @@ class Verlo_Brief_Admin {
 					});
 				}
 			}, 90 * 1000);
+		})();
+
+		// Warn before generating from a brief with unsaved edits — the
+		// generate/regenerate forms below are separate <form> elements from
+		// the brief editor, so an edited-but-unsaved field (e.g. target
+		// length) is otherwise silently discarded: the server only ever
+		// reads the last SAVED brief, never anything sitting in the form.
+		(function(){
+			var briefForm = document.getElementById('verlo-brief-form');
+			if(!briefForm) return;
+			var initial = new URLSearchParams(new FormData(briefForm)).toString();
+			function isDirty(){
+				return new URLSearchParams(new FormData(briefForm)).toString() !== initial;
+			}
+			document.querySelectorAll('form[data-verlo-confirm-unsaved]').forEach(function(f){
+				f.addEventListener('submit', function(e){
+					if(isDirty() && !confirm('This brief has unsaved changes. Generating now uses the last SAVED version, not your edits. Continue anyway, or cancel and save first?')){
+						e.preventDefault();
+					}
+				});
+			});
 		})();
 		</script>
 		<?php
