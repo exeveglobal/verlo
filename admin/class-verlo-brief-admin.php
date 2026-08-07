@@ -412,7 +412,20 @@ class Verlo_Brief_Admin {
 					</td></tr>
 					<tr class="verlo-field"><th>External source ideas (one per line)</th><td><textarea name="external_ideas" rows="3"><?php echo esc_textarea( implode( "\n", $b['external_ideas'] ) ); ?></textarea></td></tr>
 					<tr class="verlo-field"><th>FAQ questions (one per line)</th><td><textarea name="faq" rows="4"><?php echo esc_textarea( implode( "\n", $b['faq'] ) ); ?></textarea></td></tr>
-					<tr class="verlo-field"><th>Target word count</th><td><input type="number" name="word_count" value="<?php echo (int) $b['word_count']; ?>" min="300" step="100" style="max-width:140px;" /></td></tr>
+					<tr class="verlo-field"><th>Target length</th><td>
+						<?php
+						// Values are the band midpoints the SaaS classifier uses (see
+						// verlo-saas's classifyWordCount), not the band edges — sending
+						// these exact numbers keeps the payload shape identical to the
+						// old free-text field, so nothing downstream needs to change.
+						$verlo_wc_band = ( (int) $b['word_count'] < 1050 ) ? 750 : ( ( (int) $b['word_count'] < 1750 ) ? 1350 : 2250 );
+						?>
+						<select name="word_count" style="max-width:240px;">
+							<option value="750" <?php selected( $verlo_wc_band, 750 ); ?>>Small (600-900 words)</option>
+							<option value="1350" <?php selected( $verlo_wc_band, 1350 ); ?>>Medium (1200-1500 words)</option>
+							<option value="2250" <?php selected( $verlo_wc_band, 2250 ); ?>>Long (2000-2500 words)</option>
+						</select>
+					</td></tr>
 					<tr class="verlo-field"><th>Voice note</th><td><textarea name="voice_note" rows="2"><?php echo esc_textarea( $b['voice_note'] ); ?></textarea></td></tr>
 				</table>
 				<div class="verlo-actions">
@@ -673,7 +686,10 @@ class Verlo_Brief_Admin {
 		$b['internal_links']  = $links;
 		$b['external_ideas']  = $lines( 'external_ideas' );
 		$b['faq']             = $lines( 'faq' );
-		$b['word_count']      = max( 300, (int) ( $_POST['word_count'] ?? 1500 ) );
+		// Defensively clamp to the closed enum — the dropdown only ever sends
+		// one of these three values, but never trust POST data at face value.
+		$verlo_wc_posted = (int) ( $_POST['word_count'] ?? 1350 );
+		$b['word_count'] = in_array( $verlo_wc_posted, array( 750, 1350, 2250 ), true ) ? $verlo_wc_posted : 1350;
 		$b['voice_note']      = sanitize_textarea_field( wp_unslash( $_POST['voice_note'] ?? '' ) );
 		$b['meta']['updated_at'] = time();
 
