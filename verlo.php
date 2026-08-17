@@ -3,7 +3,7 @@
  * Plugin Name:       Verlo
  * Plugin URI:        https://exeve.global/
  * Description:       Verlo plans, writes, and optimizes SEO content for your site, end to end. It builds a knowledge graph of your existing content, designs a topical map of pillars and planned articles, turns each into a content brief, and generates publish-ready, human-quality draft articles, complete with on-page SEO, internal links, and stock images, for your review before publishing.
- * Version:           1.1.5
+ * Version:           1.1.6
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            EXEVE
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'VERLO_VERSION', '1.1.5' );
+define( 'VERLO_VERSION', '1.1.6' );
 define( 'VERLO_FILE', __FILE__ );
 define( 'VERLO_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VERLO_URL', plugin_dir_url( __FILE__ ) );
@@ -32,6 +32,7 @@ define( 'VERLO_OPT_PROGRESS', 'verlo_rebuild_progress' );
 define( 'VERLO_OPT_SNAPSHOT', 'verlo_rebuild_snapshot' );
 define( 'VERLO_OPT_CACHE_VER', 'verlo_kg_cache_ver' );
 define( 'VERLO_OPT_SETTINGS', 'verlo_settings' );
+define( 'VERLO_OPT_DB_VERSION', 'verlo_db_version' );
 
 // Cron / action hooks.
 define( 'VERLO_HOOK_REBUILD_CONTINUE', 'verlo_rebuild_continue' );
@@ -95,6 +96,7 @@ function verlo_target_post_types() {
  */
 function verlo_activate() {
 	Verlo_Install::create_tables();
+	update_option( VERLO_OPT_DB_VERSION, VERLO_VERSION, '', 'yes' );
 	add_option( VERLO_OPT_CACHE_VER, 1, '', 'no' );
 	// Build the graph for the first time (chunked, in the background).
 	Verlo_Rebuild::start( verlo_target_post_types(), 'activation' );
@@ -114,9 +116,28 @@ function verlo_deactivate() {
 register_deactivation_hook( __FILE__, 'verlo_deactivate' );
 
 /**
+ * Re-applies the schema (via dbDelta(), which safely diffs and only applies
+ * what's changed) whenever the installed DB version doesn't match
+ * VERLO_VERSION. register_activation_hook only fires on a fresh activate,
+ * never on an in-place update (zip re-upload or a future auto-update), so
+ * without this a schema change shipped in a later release would silently
+ * never reach an already-installed site. get_option() here is effectively
+ * free once VERLO_OPT_DB_VERSION is autoloaded (the common case), so this
+ * runs safely on every request rather than only on an explicit update hook.
+ */
+function verlo_maybe_upgrade() {
+	if ( get_option( VERLO_OPT_DB_VERSION ) === VERLO_VERSION ) {
+		return;
+	}
+	Verlo_Install::create_tables();
+	update_option( VERLO_OPT_DB_VERSION, VERLO_VERSION, '', 'yes' );
+}
+
+/**
  * Boot runtime hooks.
  */
 function verlo_boot() {
+	verlo_maybe_upgrade();
 	Verlo_Knowledge_Graph::init();   // incremental index hooks
 	Verlo_Rebuild::init();           // cron continuation handler
 
