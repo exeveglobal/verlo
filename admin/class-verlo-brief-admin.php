@@ -252,13 +252,31 @@ class Verlo_Brief_Admin {
 						$m = floor( $secs / 60 ); $s = (int) round( $secs - $m * 60 );
 						$time_h = $m > 0 ? ( $m . 'm ' . $s . 's' ) : ( $s . 's' );
 					} else { $time_h = '—'; }
-					$title = '' !== $r['title'] ? $r['title'] : $r['keyword'];
+					$title  = '' !== $r['title'] ? $r['title'] : $r['keyword'];
+					$vcount = isset( $r['version_count'] ) ? (int) $r['version_count'] : 1;
+					$prior  = $vcount > 1 ? array_slice( $r['versions'], 1 ) : array();
 					?>
 					<tr>
 						<td>
 							<strong><?php echo esc_html( $title ); ?></strong>
 							<?php if ( '' !== $r['keyword'] && $r['keyword'] !== $title ) : ?>
 								<br><span style="color:#646970;font-size:12px;"><?php echo esc_html( $r['keyword'] ); ?></span>
+							<?php endif; ?>
+							<?php if ( $vcount > 1 ) : ?>
+								<br><details style="margin-top:4px;">
+									<summary style="cursor:pointer;color:#646970;font-size:12px;">Regenerated <?php echo (int) ( $vcount - 1 ); ?>&times; &mdash; view history</summary>
+									<ul style="margin:6px 0 0 0;padding-left:16px;font-size:12px;color:#646970;">
+										<?php foreach ( $prior as $v ) :
+											$vtitle = '' !== $v['title'] ? $v['title'] : $v['keyword'];
+											?>
+											<li style="margin-bottom:2px;">
+												v<?php echo (int) $v['version']; ?> &middot;
+												<?php echo esc_html( $vtitle ); ?> &middot;
+												<span title="<?php echo esc_attr( wp_date( 'M j, Y H:i', (int) $v['generated_at'] ) ); ?>"><?php echo esc_html( human_time_diff( (int) $v['generated_at'], time() ) ); ?> ago</span>
+											</li>
+										<?php endforeach; ?>
+									</ul>
+								</details>
 							<?php endif; ?>
 						</td>
 						<td><?php echo $r['pillar'] ? esc_html( $r['pillar'] ) : '<span style="color:#999;">—</span>'; ?></td>
