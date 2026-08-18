@@ -3,7 +3,7 @@
  * Plugin Name:       Verlo
  * Plugin URI:        https://exeve.global/
  * Description:       Verlo plans, writes, and optimizes SEO content for your site, end to end. It builds a knowledge graph of your existing content, designs a topical map of pillars and planned articles, turns each into a content brief, and generates publish-ready, human-quality draft articles, complete with on-page SEO, internal links, and stock images, for your review before publishing.
- * Version:           1.1.6
+ * Version:           1.1.7
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            EXEVE
@@ -21,10 +21,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'VERLO_VERSION', '1.1.6' );
+define( 'VERLO_VERSION', '1.1.7' );
 define( 'VERLO_FILE', __FILE__ );
 define( 'VERLO_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VERLO_URL', plugin_dir_url( __FILE__ ) );
+define( 'VERLO_DOCS_URL', 'https://verlohub.com/guide' );
 
 // Option keys.
 define( 'VERLO_OPT_POST_TYPES', 'verlo_post_types' );
@@ -103,8 +104,55 @@ function verlo_activate() {
 	if ( ! wp_next_scheduled( VERLO_HOOK_REBUILD_CONTINUE ) ) {
 		wp_schedule_single_event( time() + 5, VERLO_HOOK_REBUILD_CONTINUE );
 	}
+	// Marks this activation as a fresh one-time redirect target — checked
+	// (and cleared) on the very next admin_init, so it fires once and never
+	// hijacks a later, unrelated admin page load.
+	set_transient( 'verlo_activation_redirect', 1, 60 );
 }
 register_activation_hook( __FILE__, 'verlo_activate' );
+
+/**
+ * Sends a brand-new single-plugin activation straight to the Verlo
+ * dashboard instead of leaving it wherever WP happened to land (usually the
+ * Plugins list, with only a generic "Plugin activated" notice) — onboarding
+ * previously relied entirely on the README. Skipped for bulk/network
+ * activation, where a forced redirect would be disruptive rather than
+ * helpful.
+ */
+function verlo_activation_redirect() {
+	if ( ! get_transient( 'verlo_activation_redirect' ) ) {
+		return;
+	}
+	delete_transient( 'verlo_activation_redirect' );
+
+	if ( wp_doing_ajax() || isset( $_GET['activate-multi'] ) || is_network_admin() || ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+
+	wp_safe_redirect( admin_url( 'admin.php?page=verlo' ) );
+	exit;
+}
+add_action( 'admin_init', 'verlo_activation_redirect' );
+
+/**
+ * Docs/Support links on the Plugins list — the only in-admin pointer to
+ * documentation or a human before this shipped.
+ */
+add_filter( 'plugin_action_links_' . plugin_basename( VERLO_FILE ), 'verlo_plugin_action_links' );
+function verlo_plugin_action_links( $links ) {
+	array_unshift( $links, '<a href="' . esc_url( VERLO_DOCS_URL ) . '" target="_blank" rel="noopener noreferrer">Docs</a>' );
+	return $links;
+}
+
+add_filter( 'plugin_row_meta', 'verlo_plugin_row_meta', 10, 2 );
+function verlo_plugin_row_meta( $links, $file ) {
+	if ( plugin_basename( VERLO_FILE ) !== $file ) {
+		return $links;
+	}
+	$links[] = '<a href="' . esc_url( VERLO_DOCS_URL ) . '" target="_blank" rel="noopener noreferrer">Documentation</a>';
+	$links[] = '<a href="mailto:support@verlohub.com">Support</a>';
+	return $links;
+}
 
 /**
  * Deactivation: clear scheduled continuation (keep tables + data).

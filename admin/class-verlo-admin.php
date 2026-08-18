@@ -54,7 +54,9 @@ class Verlo_Admin {
 		$pct       = ( $progress['total'] > 0 ) ? round( ( $progress['done'] / $progress['total'] ) * 100 ) : 0;
 		?>
 		<div class="wrap verlo-wrap">
-			<h1>Verlo: Knowledge Graph</h1>
+			<h1>Verlo: Knowledge Graph
+				<a href="<?php echo esc_url( VERLO_DOCS_URL ); ?>" target="_blank" rel="noopener noreferrer" class="page-title-action">Help &amp; Docs</a>
+			</h1>
 			<p style="margin-top:2px;color:#646970;">The site's content index: powers internal linking, topic-gap analysis, and Verlo site analysis.</p>
 			<?php if ( $running ) : ?>
 				<script>setTimeout(function(){ location.reload(); }, 3000);</script>
