@@ -14,6 +14,7 @@ class Verlo_Brief_Admin {
 		add_action( 'admin_post_verlo_brief_save', array( __CLASS__, 'handle_save' ) );
 		add_action( 'admin_post_verlo_brief_delete', array( __CLASS__, 'handle_delete' ) );
 		add_action( 'admin_post_verlo_brief_generate_article', array( __CLASS__, 'handle_generate_article' ) );
+		add_action( 'admin_post_verlo_restore_version', array( __CLASS__, 'handle_restore_version' ) );
 
 		// The background worker hooks (verlo_run_generation, verlo_cron_generate)
 		// are registered in the bootstrap so they fire outside admin context.
@@ -222,6 +223,12 @@ class Verlo_Brief_Admin {
 		$rows = Verlo_Article_Log::recent( 200 );
 		if ( empty( $rows ) ) { return; }
 
+		// Which past version's diff (against the CURRENT live content) to
+		// show inline, if any — a plain GET param, safe/idempotent like the
+		// existing verlo_brief view-id param elsewhere on this page.
+		$diff_post    = isset( $_GET['verlo_diff_post'] ) ? (int) $_GET['verlo_diff_post'] : 0;
+		$diff_version = isset( $_GET['verlo_diff_version'] ) ? (int) $_GET['verlo_diff_version'] : 0;
+
 		$labels = array(
 			'published' => array( 'Published', '#1a7f37', '#dafbe1' ),
 			'draft'     => array( 'Draft', '#9a6700', '#fff8c5' ),
@@ -265,16 +272,42 @@ class Verlo_Brief_Admin {
 								<br><span style="color:#646970;font-size:12px;"><?php echo esc_html( $r['keyword'] ); ?></span>
 							<?php endif; ?>
 							<?php if ( $vcount > 1 ) : ?>
-								<br><details style="margin-top:4px;">
+								<br><details style="margin-top:4px;"<?php echo ( $diff_post === (int) $r['post_id'] ) ? ' open' : ''; ?>>
 									<summary style="cursor:pointer;color:#646970;font-size:12px;">Regenerated <?php echo (int) ( $vcount - 1 ); ?>&times; &mdash; view history</summary>
 									<ul style="margin:6px 0 0 0;padding-left:16px;font-size:12px;color:#646970;">
 										<?php foreach ( $prior as $v ) :
-											$vtitle = '' !== $v['title'] ? $v['title'] : $v['keyword'];
+											$vtitle       = '' !== $v['title'] ? $v['title'] : $v['keyword'];
+											$has_content  = null !== Verlo_Article_Log::get_version_content( $r['post_id'], $v['version'] );
+											$is_shown     = $diff_post === (int) $r['post_id'] && $diff_version === (int) $v['version'];
+											$diff_url     = add_query_arg(
+												array(
+													'page'                => 'verlo-briefs',
+													'verlo_diff_post'     => (int) $r['post_id'],
+													'verlo_diff_version'  => (int) $v['version'],
+												),
+												admin_url( 'admin.php' )
+											) . '#verlo-diff-' . (int) $r['post_id'];
 											?>
-											<li style="margin-bottom:2px;">
+											<li style="margin-bottom:4px;">
 												v<?php echo (int) $v['version']; ?> &middot;
 												<?php echo esc_html( $vtitle ); ?> &middot;
 												<span title="<?php echo esc_attr( wp_date( 'M j, Y H:i', (int) $v['generated_at'] ) ); ?>"><?php echo esc_html( human_time_diff( (int) $v['generated_at'], time() ) ); ?> ago</span>
+												<?php if ( ! empty( $v['restored_from'] ) ) : ?>
+													<span style="color:#0969da;">&middot; restored from v<?php echo (int) $v['restored_from']; ?></span>
+												<?php endif; ?>
+												<?php if ( $has_content ) : ?>
+													&middot; <a href="<?php echo esc_url( $diff_url ); ?>"><?php echo $is_shown ? 'Hide diff' : 'View diff'; ?></a>
+													&middot;
+													<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline;" onsubmit="return confirm('Restore version <?php echo (int) $v['version']; ?>? This replaces the current live draft content — the content that\'s live right now stays in the history too, one version back, so nothing is lost.');">
+														<input type="hidden" name="action" value="verlo_restore_version" />
+														<input type="hidden" name="post_id" value="<?php echo (int) $r['post_id']; ?>" />
+														<input type="hidden" name="version" value="<?php echo (int) $v['version']; ?>" />
+														<?php wp_nonce_field( 'verlo_restore_version' ); ?>
+														<button type="submit" class="button-link" style="color:#cf222e;font-size:12px;">Restore</button>
+													</form>
+												<?php else : ?>
+													<span style="color:#999;">&middot; no saved content to diff/restore</span>
+												<?php endif; ?>
 											</li>
 										<?php endforeach; ?>
 									</ul>
@@ -294,9 +327,69 @@ class Verlo_Brief_Admin {
 							<?php endif; ?>
 						</td>
 					</tr>
+					<?php if ( $diff_post === (int) $r['post_id'] && $diff_version ) : ?>
+						<tr id="verlo-diff-<?php echo (int) $r['post_id']; ?>">
+							<td colspan="6" style="background:#f6f7f7;padding:16px;">
+								<?php self::render_version_diff( (int) $r['post_id'], $diff_version ); ?>
+							</td>
+						</tr>
+					<?php endif; ?>
 				<?php endforeach; ?>
 				</tbody>
 			</table>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Renders a diff between one past version's stored content and the
+	 * CURRENT live post content, using WordPress's own wp_text_diff() — the
+	 * same renderer core uses on the native Revisions screen, so the output
+	 * is already safely escaped (raw HTML in post_content shows as literal
+	 * text within the diff, never re-rendered) and needs no styling beyond
+	 * what's inlined here, since this page doesn't enqueue wp-admin's
+	 * revisions.css.
+	 */
+	protected static function render_version_diff( $post_id, $version ) {
+		$old_content = Verlo_Article_Log::get_version_content( $post_id, $version );
+		if ( null === $old_content ) {
+			echo '<p style="color:#999;margin:0;">That version&#8217;s content is no longer available to diff.</p>';
+			return;
+		}
+		$post = get_post( $post_id );
+		if ( ! $post ) {
+			echo '<p style="color:#999;margin:0;">This article no longer exists.</p>';
+			return;
+		}
+
+		require_once ABSPATH . WPINC . '/wp-diff.php';
+		$diff = wp_text_diff( $old_content, $post->post_content, array(
+			'title'       => '',
+			'title_left'  => 'Version ' . (int) $version,
+			'title_right' => 'Current (live)',
+		) );
+
+		if ( ! $diff ) {
+			printf(
+				'<p style="color:#646970;margin:0;">Version %d is identical to the current live content — no changes.</p>',
+				(int) $version
+			);
+			return;
+		}
+		?>
+		<style>
+			#verlo-diff-<?php echo (int) $post_id; ?> table.diff { width: 100%; border-collapse: collapse; font-size: 12px; font-family: ui-monospace, Consolas, monospace; }
+			#verlo-diff-<?php echo (int) $post_id; ?> table.diff col.content { width: 50%; }
+			#verlo-diff-<?php echo (int) $post_id; ?> table.diff td,
+			#verlo-diff-<?php echo (int) $post_id; ?> table.diff th { padding: 4px 8px; vertical-align: top; }
+			#verlo-diff-<?php echo (int) $post_id; ?> table.diff th { text-align: left; background: #eaeef2; }
+			#verlo-diff-<?php echo (int) $post_id; ?> table.diff .diff-deletedline { background: #ffebe9; }
+			#verlo-diff-<?php echo (int) $post_id; ?> table.diff .diff-addedline { background: #dafbe1; }
+			#verlo-diff-<?php echo (int) $post_id; ?> table.diff del { background: #ffc1c0; text-decoration: none; }
+			#verlo-diff-<?php echo (int) $post_id; ?> table.diff ins { background: #8ae6a3; text-decoration: none; }
+		</style>
+		<div style="overflow-x:auto;">
+			<?php echo $diff; ?>
 		</div>
 		<?php
 	}
@@ -385,7 +478,7 @@ class Verlo_Brief_Admin {
 						</div>
 					</div>
 					<div class="verlo-actions" style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(0,0,0,.06);">
-						<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline" data-verlo-confirm-unsaved="1" onsubmit="return confirm('Regenerate the article? It will overwrite the current draft content.');">
+						<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline" data-verlo-confirm-unsaved="1" onsubmit="return confirm('Regenerate the article? It will replace the current draft content — the current version stays in the history below and can be restored any time.');">
 							<input type="hidden" name="action" value="verlo_brief_generate_article" />
 							<input type="hidden" name="article_id" value="<?php echo (int) $aid; ?>" />
 							<?php wp_nonce_field( 'verlo_brief_generate_article' ); ?>
@@ -763,6 +856,25 @@ class Verlo_Brief_Admin {
 		$aid = (int) ( $_POST['article_id'] ?? 0 );
 		Verlo_Brief::delete( $aid );
 		self::redirect( 'Brief deleted.' );
+	}
+
+	/**
+	 * Sets a post's live content back to a past generated version. The
+	 * restore itself is recorded as a new version (see
+	 * Verlo_Article_Log::restore()), so this can never actually lose
+	 * anything — even what was live immediately before the restore stays
+	 * in the history, one version back.
+	 */
+	public static function handle_restore_version() {
+		self::guard( 'verlo_restore_version' );
+		$post_id = (int) ( $_POST['post_id'] ?? 0 );
+		$version = (int) ( $_POST['version'] ?? 0 );
+
+		$result = Verlo_Article_Log::restore( $post_id, $version );
+		if ( is_wp_error( $result ) ) {
+			self::redirect( 'Could not restore that version: ' . $result->get_error_message(), true );
+		}
+		self::redirect( 'Restored version ' . $version . '. The live draft now matches it — this is recorded as a new version, so nothing that was live before is lost either.' );
 	}
 
 	public static function handle_generate_article() {

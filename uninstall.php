@@ -2,9 +2,9 @@
 /**
  * Fires only on "Delete" from the Plugins list (never on deactivate), after
  * WordPress has already confirmed the request. Removes everything Verlo
- * leaves in the database: the two knowledge-graph tables, every verlo_*
- * option (including the encrypted license key and SaaS token), and every
- * verlo_*-prefixed transient.
+ * leaves in the database: the knowledge-graph tables, the article
+ * content-version table, every verlo_* option (including the encrypted
+ * license key and SaaS token), and every verlo_*-prefixed transient.
  *
  * Deliberately uses wildcard DELETEs against wp_options instead of an
  * exhaustive hardcoded list of option names: several call sites store
@@ -25,6 +25,7 @@ require_once __DIR__ . '/includes/class-verlo-install.php';
 
 $wpdb->query( 'DROP TABLE IF EXISTS ' . Verlo_Install::objects_table() );
 $wpdb->query( 'DROP TABLE IF EXISTS ' . Verlo_Install::terms_table() );
+$wpdb->query( 'DROP TABLE IF EXISTS ' . Verlo_Install::article_versions_table() );
 
 // Plain options: verlo_settings, verlo_saas_token, verlo_license_key,
 // verlo_article_log, verlo_db_version, etc. — everything not underscore-prefixed.

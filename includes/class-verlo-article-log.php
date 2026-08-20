@@ -16,6 +16,12 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *
  * Live status (draft/published/trashed/deleted) is computed from the real post
  * at display time, so the history can never show a stale or false state.
+ *
+ * The full post_content per version lives separately, in
+ * Verlo_Install::article_versions_table() — see that class's docblock for
+ * why (this option stores metadata only; full HTML per version would bloat
+ * an autoloaded wp_options row). get_version_content()/restore() below read
+ * and write that table; every other method here only ever touches metadata.
  */
 class Verlo_Article_Log {
 
@@ -26,7 +32,10 @@ class Verlo_Article_Log {
 	/**
 	 * Record a new generation. Keyed by post_id; each call APPENDS a version
 	 * rather than replacing the post's history, so every past generation of
-	 * the same draft stays visible.
+	 * the same draft stays visible. Pass 'content' (the post_content just
+	 * written) to also snapshot it for later diff/restore — optional so
+	 * existing callers that don't have it handy still work, but the
+	 * generator and restore() below always pass it.
 	 */
 	public static function record( $data ) {
 		$post_id = isset( $data['post_id'] ) ? (int) $data['post_id'] : 0;
@@ -35,20 +44,26 @@ class Verlo_Article_Log {
 		$rows     = self::all();
 		$existing = self::normalize_versions( isset( $rows[ $post_id ] ) ? $rows[ $post_id ] : array() );
 
-		$version = array(
-			'version'     => count( $existing ) + 1,
-			'article_id'  => isset( $data['article_id'] ) ? (int) $data['article_id'] : 0,
-			'keyword'     => isset( $data['keyword'] ) ? (string) $data['keyword'] : '',
-			'title'       => isset( $data['title'] ) ? (string) $data['title'] : '',
-			'pillar'      => isset( $data['pillar'] ) ? (string) $data['pillar'] : '',
-			'word_target' => isset( $data['word_target'] ) ? (int) $data['word_target'] : 0,
-			'gen_seconds' => isset( $data['gen_seconds'] ) ? (float) $data['gen_seconds'] : null,
-			'run_id'      => isset( $data['run_id'] ) ? (string) $data['run_id'] : '',
-			'generated_at'=> time(),
+		$version_num = count( $existing ) + 1;
+		$version     = array(
+			'version'       => $version_num,
+			'article_id'    => isset( $data['article_id'] ) ? (int) $data['article_id'] : 0,
+			'keyword'       => isset( $data['keyword'] ) ? (string) $data['keyword'] : '',
+			'title'         => isset( $data['title'] ) ? (string) $data['title'] : '',
+			'pillar'        => isset( $data['pillar'] ) ? (string) $data['pillar'] : '',
+			'word_target'   => isset( $data['word_target'] ) ? (int) $data['word_target'] : 0,
+			'gen_seconds'   => isset( $data['gen_seconds'] ) ? (float) $data['gen_seconds'] : null,
+			'run_id'        => isset( $data['run_id'] ) ? (string) $data['run_id'] : '',
+			// Set only when this version was produced by restore(), not a
+			// fresh generation — the history UI uses this to label it.
+			'restored_from' => isset( $data['restored_from'] ) ? (int) $data['restored_from'] : 0,
+			'generated_at'  => time(),
 		);
 
 		$existing[] = $version;
+		$dropped    = array();
 		if ( count( $existing ) > self::MAX_VERSIONS ) {
+			$dropped  = array_slice( $existing, 0, count( $existing ) - self::MAX_VERSIONS );
 			$existing = array_slice( $existing, -self::MAX_VERSIONS );
 		}
 
@@ -63,6 +78,103 @@ class Verlo_Article_Log {
 		}
 
 		update_option( self::OPT, $rows, 'no' );
+
+		if ( isset( $data['content'] ) ) {
+			self::save_version_content( $post_id, $version_num, (string) $data['content'] );
+		}
+		// Keep the content table in lockstep with whatever the metadata trim
+		// above just dropped, so it can never grow past what's actually
+		// still referenced from the option.
+		foreach ( $dropped as $old ) {
+			self::delete_version_content( $post_id, (int) $old['version'] );
+		}
+	}
+
+	/** Insert/replace one version's full post_content snapshot. */
+	protected static function save_version_content( $post_id, $version, $content ) {
+		global $wpdb;
+		$wpdb->replace(
+			Verlo_Install::article_versions_table(),
+			array(
+				'post_id' => (int) $post_id,
+				'version' => (int) $version,
+				'content' => $content,
+				'saved_at'=> current_time( 'mysql' ),
+			),
+			array( '%d', '%d', '%s', '%s' )
+		);
+	}
+
+	protected static function delete_version_content( $post_id, $version ) {
+		global $wpdb;
+		$wpdb->delete(
+			Verlo_Install::article_versions_table(),
+			array( 'post_id' => (int) $post_id, 'version' => (int) $version ),
+			array( '%d', '%d' )
+		);
+	}
+
+	/**
+	 * The stored post_content for one past version, or null if none was
+	 * ever saved for it (e.g. a version recorded before this feature
+	 * shipped, or one already pruned past MAX_VERSIONS).
+	 */
+	public static function get_version_content( $post_id, $version ) {
+		global $wpdb;
+		$table = Verlo_Install::article_versions_table();
+		$row   = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT content FROM {$table} WHERE post_id = %d AND version = %d",
+				(int) $post_id,
+				(int) $version
+			)
+		);
+		return null === $row ? null : (string) $row;
+	}
+
+	/**
+	 * Sets the live post's content back to a past version, and records that
+	 * as a NEW version rather than silently overwriting — so restoring
+	 * never erases what was live immediately before the restore either.
+	 * Returns true on success, or a WP_Error if the version's content was
+	 * never stored (too old / already pruned) or the post no longer exists.
+	 */
+	public static function restore( $post_id, $version ) {
+		$post_id = (int) $post_id;
+		$content = self::get_version_content( $post_id, $version );
+		if ( null === $content ) {
+			return new WP_Error( 'verlo_no_version_content', 'That version has no saved content to restore (it may predate this feature, or have been pruned).' );
+		}
+		$post = get_post( $post_id );
+		if ( ! $post ) {
+			return new WP_Error( 'verlo_post_missing', 'That article no longer exists.' );
+		}
+
+		$updated = wp_update_post( array( 'ID' => $post_id, 'post_content' => $content ), true );
+		if ( is_wp_error( $updated ) ) { return $updated; }
+
+		// Pull the restored version's own metadata forward onto the new
+		// entry, so the history row still shows a sensible title/keyword
+		// rather than blanks.
+		$rows     = self::all();
+		$existing = self::normalize_versions( isset( $rows[ $post_id ] ) ? $rows[ $post_id ] : array() );
+		$source   = null;
+		foreach ( $existing as $v ) {
+			if ( (int) $v['version'] === (int) $version ) { $source = $v; break; }
+		}
+
+		self::record( array(
+			'post_id'       => $post_id,
+			'article_id'    => $source ? $source['article_id'] : 0,
+			'keyword'       => $source ? $source['keyword'] : '',
+			'title'         => $source ? $source['title'] : get_the_title( $post_id ),
+			'pillar'        => $source ? $source['pillar'] : '',
+			'word_target'   => $source ? $source['word_target'] : 0,
+			'content'       => $content,
+			'restored_from' => (int) $version,
+		) );
+
+		return true;
 	}
 
 	/**
@@ -176,12 +288,19 @@ class Verlo_Article_Log {
 	}
 
 	/**
-	 * Optional: drop the record for a post (not used by the UI, which is
-	 * read-only, but available for housekeeping/uninstall).
+	 * Drop the record for a post, metadata and stored content both —
+	 * available for housekeeping/uninstall (not exposed as a per-post UI
+	 * action; the history views are otherwise read-only aside from
+	 * restore()).
 	 */
 	public static function forget( $post_id ) {
+		global $wpdb;
+		$post_id = (int) $post_id;
+
 		$rows = self::all();
-		unset( $rows[ (int) $post_id ] );
+		unset( $rows[ $post_id ] );
 		update_option( self::OPT, $rows, 'no' );
+
+		$wpdb->delete( Verlo_Install::article_versions_table(), array( 'post_id' => $post_id ), array( '%d' ) );
 	}
 }

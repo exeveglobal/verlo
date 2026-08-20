@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.11
+Stable tag: 1.1.12
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,9 @@ Verlo doesn't expose which AI provider or model it uses in any part of the plugi
 
 == Changelog ==
 
+= 1.1.12 =
+* Regenerating an article no longer risks losing what was there before: every version's actual content is now saved (not just its title/timestamp), with a "View diff" link showing exactly what changed and a one-click "Restore" to bring back any past version. Restoring is itself recorded as a new version, so nothing — including what was live right before a restore — is ever truly lost.
+
 = 1.1.11 =
 * Added a "Getting Started" page — a real checklist of the full pipeline (connect, knowledge graph, strategy profile, topical map, content brief, first article), each step read from your actual account state rather than tracked separately, so it never goes stale and doubles as an at-a-glance status page after your first setup. A fresh activation now lands here instead of the bare Knowledge Graph page.
 
@@ -76,6 +79,9 @@ Verlo doesn't expose which AI provider or model it uses in any part of the plugi
 * Prior release. See the full user guide at https://verlohub.com/guide for setup and usage details.
 
 == Upgrade Notice ==
+
+= 1.1.12 =
+Adds a new database table for article version history. Applied automatically on update, same as every schema change since 1.1.9 — no manual steps required.
 
 = 1.1.9 =
 Deleting the plugin now cleans up its database tables and stored options instead of leaving them behind.

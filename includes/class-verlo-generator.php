@@ -443,6 +443,13 @@ class Verlo_Generator {
 		// Durable article-history record (survives map rebuilds and the event
 		// log rolling over). Keyed by post_id so a regenerate updates in place.
 		if ( class_exists( 'Verlo_Article_Log' ) ) {
+			// Re-read the post rather than reuse $postarr['post_content']: the
+			// optional image step above may have run a second wp_update_post()
+			// with in-body images spliced in, and the version snapshot needs to
+			// match what's actually live, not what was written before that.
+			$final_post    = get_post( $post_id );
+			$final_content = $final_post ? $final_post->post_content : $postarr['post_content'];
+
 			Verlo_Article_Log::record( array(
 				'post_id'     => (int) $post_id,
 				'article_id'  => (int) $article_id,
@@ -452,6 +459,7 @@ class Verlo_Generator {
 				'word_target' => (int) ( $brief['word_count'] ?? 0 ),
 				'gen_seconds' => (float) $timing['total_s'],
 				'run_id'      => $run_id,
+				'content'     => $final_content,
 			) );
 		}
 
