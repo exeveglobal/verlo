@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.8
+Stable tag: 1.1.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,9 @@ Verlo doesn't expose which AI provider or model it uses in any part of the plugi
 
 == Changelog ==
 
+= 1.1.9 =
+* Deleting the plugin (not just deactivating it) now fully removes its data: the knowledge-graph database tables, and every stored option, including the encrypted license key and connection token. Previously these were left behind indefinitely.
+
 = 1.1.8 =
 * The "Generated articles" history now keeps every past version of a regenerated draft, not just the latest — regenerating an article no longer erases the record of what it looked like before.
 
@@ -67,6 +70,9 @@ Verlo doesn't expose which AI provider or model it uses in any part of the plugi
 * Prior release. See the full user guide at https://verlohub.com/guide for setup and usage details.
 
 == Upgrade Notice ==
+
+= 1.1.9 =
+Deleting the plugin now cleans up its database tables and stored options instead of leaving them behind.
 
 = 1.1.8 =
 Schema migrations run automatically on plugin update — no manual steps required.
