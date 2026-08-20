@@ -89,7 +89,9 @@ class Verlo_Brief_Admin {
 		$link_billing = isset( $_GET['verlo_link_billing'] );
 		?>
 		<div class="wrap verlo-wrap">
-			<h1>Content Briefs</h1>
+			<h1>Content Briefs
+				<a href="<?php echo esc_url( VERLO_DOCS_URL ); ?>" target="_blank" rel="noopener noreferrer" class="page-title-action">Help &amp; Docs</a>
+			</h1>
 			<p style="margin-top:2px;color:#646970;">The spec for each planned article: title, angle, outline, internal links, and intent. Reviewed before anything is written.</p>
 			<?php if ( $notice && '__generating__' !== $notice ) : ?>
 				<div class="notice <?php echo $is_error ? 'notice-error' : 'notice-success'; ?> is-dismissible"><p>

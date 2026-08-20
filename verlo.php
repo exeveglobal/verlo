@@ -3,7 +3,7 @@
  * Plugin Name:       Verlo
  * Plugin URI:        https://exeve.global/
  * Description:       Verlo plans, writes, and optimizes SEO content for your site, end to end. It builds a knowledge graph of your existing content, designs a topical map of pillars and planned articles, turns each into a content brief, and generates publish-ready, human-quality draft articles, complete with on-page SEO, internal links, and stock images, for your review before publishing.
- * Version:           1.1.9
+ * Version:           1.1.11
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            EXEVE
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'VERLO_VERSION', '1.1.9' );
+define( 'VERLO_VERSION', '1.1.11' );
 define( 'VERLO_FILE', __FILE__ );
 define( 'VERLO_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VERLO_URL', plugin_dir_url( __FILE__ ) );
@@ -55,6 +55,7 @@ require_once VERLO_DIR . 'includes/class-verlo-strategist.php';
 require_once VERLO_DIR . 'includes/class-verlo-generator.php';
 require_once VERLO_DIR . 'includes/class-verlo-images.php';
 require_once VERLO_DIR . 'admin/class-verlo-admin.php';
+require_once VERLO_DIR . 'admin/class-verlo-onboarding-admin.php';
 require_once VERLO_DIR . 'admin/class-verlo-profile-admin.php';
 require_once VERLO_DIR . 'admin/class-verlo-map-admin.php';
 require_once VERLO_DIR . 'admin/class-verlo-brief-admin.php';
@@ -112,12 +113,13 @@ function verlo_activate() {
 register_activation_hook( __FILE__, 'verlo_activate' );
 
 /**
- * Sends a brand-new single-plugin activation straight to the Verlo
- * dashboard instead of leaving it wherever WP happened to land (usually the
- * Plugins list, with only a generic "Plugin activated" notice) — onboarding
- * previously relied entirely on the README. Skipped for bulk/network
- * activation, where a forced redirect would be disruptive rather than
- * helpful.
+ * Sends a brand-new single-plugin activation straight to the Getting
+ * Started checklist (Verlo_Onboarding_Admin) instead of leaving it wherever
+ * WP happened to land (usually the Plugins list, with only a generic
+ * "Plugin activated" notice) — onboarding previously relied entirely on the
+ * README, then just landed on the Knowledge Graph page with no indication
+ * of what to do next or in what order. Skipped for bulk/network activation,
+ * where a forced redirect would be disruptive rather than helpful.
  */
 function verlo_activation_redirect() {
 	if ( ! get_transient( 'verlo_activation_redirect' ) ) {
@@ -129,7 +131,7 @@ function verlo_activation_redirect() {
 		return;
 	}
 
-	wp_safe_redirect( admin_url( 'admin.php?page=verlo' ) );
+	wp_safe_redirect( Verlo_Onboarding_Admin::url() );
 	exit;
 }
 add_action( 'admin_init', 'verlo_activation_redirect' );
@@ -204,6 +206,7 @@ function verlo_boot() {
 
 	if ( is_admin() ) {
 		Verlo_Admin::init();
+		Verlo_Onboarding_Admin::init();
 		Verlo_Profile_Admin::init();
 		Verlo_Map_Admin::init();
 		Verlo_Brief_Admin::init();

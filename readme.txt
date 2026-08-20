@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.9
+Stable tag: 1.1.11
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,12 @@ Yes, but a key is only active on one site at a time. Remove it from the current 
 Verlo doesn't expose which AI provider or model it uses in any part of the plugin, its output, or its support channels — this is intentional and not configurable.
 
 == Changelog ==
+
+= 1.1.11 =
+* Added a "Getting Started" page — a real checklist of the full pipeline (connect, knowledge graph, strategy profile, topical map, content brief, first article), each step read from your actual account state rather than tracked separately, so it never goes stale and doubles as an at-a-glance status page after your first setup. A fresh activation now lands here instead of the bare Knowledge Graph page.
+
+= 1.1.10 =
+* Added a "Help & Docs" link to the Content Briefs, Strategy Profile, Topical Map, and Logs pages — previously only the main Knowledge Graph dashboard and the WordPress Plugins list had one.
 
 = 1.1.9 =
 * Deleting the plugin (not just deactivating it) now fully removes its data: the knowledge-graph database tables, and every stored option, including the encrypted license key and connection token. Previously these were left behind indefinitely.

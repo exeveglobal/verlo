@@ -181,7 +181,9 @@ class Verlo_Profile_Admin {
 		$complete  = Verlo_Profile::is_complete();
 		?>
 		<div class="wrap verlo-wrap">
-			<h1>Site Strategy Profile</h1>
+			<h1>Site Strategy Profile
+				<a href="<?php echo esc_url( VERLO_DOCS_URL ); ?>" target="_blank" rel="noopener noreferrer" class="page-title-action">Help &amp; Docs</a>
+			</h1>
 			<p style="margin-top:2px;color:#646970;">The one-time configuration that drives keyword, tone, intent, and structure decisions for this site.</p>
 
 			<?php if ( $notice && $is_error ) : ?>

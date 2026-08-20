@@ -42,7 +42,9 @@ class Verlo_Map_Admin {
 		$approved = ( 'approved' === $map['status'] );
 		?>
 		<div class="wrap verlo-wrap">
-			<h1>Topical Map</h1>
+			<h1>Topical Map
+				<a href="<?php echo esc_url( VERLO_DOCS_URL ); ?>" target="_blank" rel="noopener noreferrer" class="page-title-action">Help &amp; Docs</a>
+			</h1>
 			<p style="margin-top:2px;color:#646970;">Pillars become categories; the articles beneath them are the committed content roadmap. Nothing generates until this map is approved.</p>
 
 			<?php if ( $notice ) : ?>

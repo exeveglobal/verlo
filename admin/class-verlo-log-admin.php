@@ -40,7 +40,9 @@ class Verlo_Log_Admin {
 		$notice  = isset( $_GET['verlo_notice'] ) ? sanitize_text_field( wp_unslash( $_GET['verlo_notice'] ) ) : '';
 		?>
 		<div class="wrap verlo-wrap">
-			<h1>Logs</h1>
+			<h1>Logs
+				<a href="<?php echo esc_url( VERLO_DOCS_URL ); ?>" target="_blank" rel="noopener noreferrer" class="page-title-action">Help &amp; Docs</a>
+			</h1>
 			<p style="margin-top:2px;color:#646970;">Technical events from Verlo: generation attempts, calls, and errors (including API credit, rate limits, timeouts, and security-plugin blocks). The most recent <?php echo (int) Verlo_Log::MAX_ROWS; ?> events are kept.</p>
 
 			<?php if ( $notice ) : ?>
