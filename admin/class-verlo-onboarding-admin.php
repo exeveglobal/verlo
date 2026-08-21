@@ -21,12 +21,22 @@ class Verlo_Onboarding_Admin {
 	const SLUG = 'verlo-getting-started';
 
 	public static function init() {
-		// Priority 5, earlier than Verlo_Admin::init()'s default-priority
-		// add_menu_page() call — WordPress lists submenu items in the order
-		// they were pushed, so registering first here is what makes "Getting
-		// Started" appear above "Verlo" (the Knowledge Graph page) in the
-		// sidebar instead of after it.
-		add_action( 'admin_menu', array( __CLASS__, 'menu' ), 5 );
+		// Default priority (10), same as Verlo_Admin's own add_menu_page()
+		// call for the 'verlo' top-level menu — deliberately NOT earlier.
+		// This used to fire at priority 5, before add_menu_page('verlo', ...)
+		// had run: WordPress's get_plugin_page_hookname() decides this
+		// submenu's routing hook by checking $admin_page_hooks['verlo'],
+		// which add_menu_page() is what populates — call add_submenu_page()
+		// before that's happened and the hookname it computes silently comes
+		// out wrong, breaking navigation to this page entirely (confirmed
+		// live 2026-08-21: clicking the sidebar link landed on a raw 404,
+		// https://.../wp-admin/verlo-getting-started, missing admin.php?page=
+		// entirely). verlo.php calls Verlo_Admin::init() immediately before
+		// Verlo_Onboarding_Admin::init(), and same-priority admin_menu
+		// callbacks fire in registration order, so plain default priority
+		// here is both correct and still lands this page second in the
+		// sidebar, right after Verlo's own Knowledge Graph page.
+		add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
 	}
 
 	public static function menu() {
