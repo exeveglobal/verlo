@@ -457,4 +457,18 @@ class Verlo_Topical_Map {
 		}
 		return $thin;
 	}
+
+	/**
+	 * Async-job runner for 'topical-map' (see Verlo_Async_Job). $context
+	 * carries the 'force' flag from the original request. Mirrors the
+	 * previous synchronous handler exactly: reopen() first when forced, then
+	 * call generate() with no argument (reopen() having already flipped the
+	 * map off 'approved' is what lets the no-force generate() proceed).
+	 */
+	public static function run_pending( $context = array() ) {
+		if ( ! empty( $context['force'] ) ) { self::reopen(); }
+		$res = self::generate();
+		if ( is_wp_error( $res ) ) { return $res; }
+		return 'Draft map generated. Review the pillars below, edit as needed, then Approve.';
+	}
 }

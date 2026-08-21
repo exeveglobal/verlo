@@ -164,4 +164,17 @@ class Verlo_Profile {
 			'constraints'        => sanitize_textarea_field( $result['constraints'] ?? '' ),
 		) );
 	}
+
+	/**
+	 * Async-job runner for 'analyze' (see Verlo_Async_Job). Wraps infer()
+	 * with the save() step that used to happen in the browser's own request,
+	 * synchronously, right after infer() returned - now it has to happen
+	 * here instead, since the browser isn't waiting around for it any more.
+	 */
+	public static function run_pending( $context = array() ) {
+		$proposed = self::infer();
+		if ( is_wp_error( $proposed ) ) { return $proposed; }
+		self::save( $proposed, 'inferred' );
+		return 'Verlo proposed values from your content. Review the fields below and Save profile.';
+	}
 }

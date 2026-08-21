@@ -113,6 +113,74 @@ class Verlo_Profile_Admin {
 				overlay.style.display = 'none';
 				if(roll){ clearInterval(roll); roll = null; }
 			});
+
+			// Resume-on-load: a redirect landed us here with a background job
+			// already queued/running (see Verlo_Async_Job) - the submit that
+			// started it happened on the PREVIOUS page load, so there is no
+			// submit event to catch here. Show the overlay immediately and poll
+			// for completion instead.
+			if (window.verloAsyncPoll) {
+				(function(){
+					var cfg = window.verloAsyncPoll;
+					msgEl.style.transition = 'opacity .2s';
+					msgEl.textContent = 'Working…';
+					startRolling(cfg.kind);
+					overlay.style.display = 'block';
+
+					var inflight = false, consecutiveFailures = 0, pollTimer = null;
+
+					function stripAndReload(extra){
+						var u = new URL(cfg.baseUrl, window.location.href);
+						Object.keys(extra || {}).forEach(function(k){ u.searchParams.set(k, extra[k]); });
+						window.location.replace(u.toString());
+					}
+
+					function poll(force){
+						if (inflight && !force) return;
+						inflight = true;
+						var url = cfg.ajaxUrl + '?action=verlo_async_status&job_key=' + encodeURIComponent(cfg.jobKey)
+							+ '&nonce=' + encodeURIComponent(cfg.nonce) + (force ? '&force=1' : '');
+						fetch(url, {credentials:'same-origin'})
+							.then(function(r){ return r.json(); })
+							.then(function(res){
+								inflight = false;
+								if (!res || !res.success) return;
+								consecutiveFailures = 0;
+								var d = res.data || {};
+								if (d.state === 'done') {
+									clearInterval(pollTimer);
+									var done = { verlo_notice: d.message || 'Done.' };
+									// brief-next's runner reports which article got the
+									// brief so we can land on its detail view, same as the
+									// old synchronous redirect_to_brief() did.
+									if (d.meta && d.meta.article_id) { done.verlo_brief = d.meta.article_id; }
+									stripAndReload(done);
+								} else if (d.state === 'error') {
+									clearInterval(pollTimer);
+									var extra = { verlo_notice: d.message || 'Something went wrong.', verlo_error: 1 };
+									if (d.meta && d.meta.error_code === 'verlo_no_content') { extra.verlo_link_kg = 1; }
+									if (d.meta && d.meta.is_billing_error) { extra.verlo_link_billing = 1; }
+									stripAndReload(extra);
+								}
+							})
+							.catch(function(){
+								inflight = false;
+								consecutiveFailures++;
+								// A poll's self-heal run can itself take a while and get cut
+								// off by a proxy before responding - the job keeps running
+								// server-side either way, so just force the next poll to
+								// check fresh rather than treating this as fatal.
+								if (consecutiveFailures >= 4) { poll(true); }
+							});
+					}
+					poll(false);
+					pollTimer = setInterval(function(){ poll(false); }, 2500);
+					// If nothing's moved shortly after landing here, force this open
+					// tab to self-heal (run the job itself) rather than wait out the
+					// full loopback/cron window passively.
+					setTimeout(function(){ poll(true); }, 8000);
+				})();
+			}
 		})();
 		</script>
 		<?php
@@ -186,7 +254,9 @@ class Verlo_Profile_Admin {
 			</h1>
 			<p style="margin-top:2px;color:#646970;">The one-time configuration that drives keyword, tone, intent, and structure decisions for this site.</p>
 
-			<?php if ( $notice && $is_error ) : ?>
+			<?php if ( '__working__' === $notice ) : ?>
+				<?php Verlo_Async_Job::render_poll_bootstrap( 'analyze', 'analyze', admin_url( 'admin.php?page=verlo-profile' ) ); ?>
+			<?php elseif ( $notice && $is_error ) : ?>
 				<!-- Deliberately not the standard thin-bordered .notice-error: this
 				     page also carries other plugins' promotional/status notices
 				     above it, and a genuine connection/action failure needs to
@@ -518,16 +588,23 @@ class Verlo_Profile_Admin {
 		self::redirect( 'Profile saved.' );
 	}
 
+	/**
+	 * Analysis calls the Verlo SaaS and can take up to ~60s
+	 * (Verlo_SaaS_Client::run_job()'s timeout) - long enough that hosts with
+	 * a shorter proxy/PHP execution limit than that (common on shared
+	 * hosting) return a 503 before it finishes, even though the analysis
+	 * itself would have succeeded. Queuing through Verlo_Async_Job instead
+	 * returns control to the browser immediately; the page shows a live
+	 * progress state and polls until the real result is ready (see
+	 * progress_overlay()'s resume-on-load poller and Verlo_Profile::run_pending()).
+	 */
 	public static function handle_analyze() {
 		self::guard( 'verlo_analyze' );
-		$proposed = Verlo_Profile::infer();
-		if ( is_wp_error( $proposed ) ) {
-			$msg     = 'Analysis failed: ' . $proposed->get_error_message();
-			$link_kg = ( 'verlo_no_content' === $proposed->get_error_code() );
-			self::redirect( $msg, true, $link_kg );
+		if ( ! Verlo_Auth::is_connected() ) {
+			self::redirect( 'Connect Verlo first under Strategy Profile → Verlo connection.', true );
 		}
-		Verlo_Profile::save( $proposed, 'inferred' );
-		self::redirect( 'Verlo proposed values from your content. Review the fields below and Save profile.' );
+		Verlo_Async_Job::queue( 'analyze' );
+		self::redirect( '__working__' );
 	}
 
 	public static function handle_export() {

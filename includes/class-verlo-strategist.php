@@ -290,4 +290,29 @@ class Verlo_Strategist {
 			'without'     => count( $planned ) - $with,
 		);
 	}
+
+	/**
+	 * Async-job runner for 'brief-next' (see Verlo_Async_Job). $context
+	 * carries 'article_id', resolved once via pick_next() at queue time
+	 * (browser request, fast/local - no AI call) so the deferred run always
+	 * targets the same article even if the map changes before this fires.
+	 */
+	public static function run_pending( $context = array() ) {
+		$article_id = isset( $context['article_id'] ) ? (int) $context['article_id'] : 0;
+		if ( ! $article_id ) {
+			return new WP_Error( 'verlo_no_target', 'No planned article was selected to brief.' );
+		}
+		$article = self::find_article( $article_id );
+		$res     = self::build_brief( $article_id );
+		if ( is_wp_error( $res ) ) { return $res; }
+
+		// Optional prefix from a chained action (e.g. "Save & next" prepends
+		// a "Brief saved. " confirmation ahead of this brief's own message).
+		$prefix = isset( $context['prefix'] ) ? (string) $context['prefix'] : '';
+
+		return array(
+			'message' => $prefix . 'Brief generated for "' . ( $article ? $article['keyword'] : '' ) . '". Review below.',
+			'meta'    => array( 'article_id' => $article_id ),
+		);
+	}
 }

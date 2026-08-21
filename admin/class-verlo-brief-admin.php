@@ -94,7 +94,9 @@ class Verlo_Brief_Admin {
 				<a href="<?php echo esc_url( VERLO_DOCS_URL ); ?>" target="_blank" rel="noopener noreferrer" class="page-title-action">Help &amp; Docs</a>
 			</h1>
 			<p style="margin-top:2px;color:#646970;">The spec for each planned article: title, angle, outline, internal links, and intent. Reviewed before anything is written.</p>
-			<?php if ( $notice && '__generating__' !== $notice ) : ?>
+			<?php if ( '__working__' === $notice ) : ?>
+				<?php Verlo_Async_Job::render_poll_bootstrap( 'brief-next', 'brief', admin_url( 'admin.php?page=verlo-briefs' ) ); ?>
+			<?php elseif ( $notice && '__generating__' !== $notice ) : ?>
 				<div class="notice <?php echo $is_error ? 'notice-error' : 'notice-success'; ?> is-dismissible"><p>
 					<?php echo esc_html( $notice ); ?>
 					<?php if ( $link_billing ) : ?>
@@ -763,25 +765,35 @@ class Verlo_Brief_Admin {
 
 	/* ----- handlers ----- */
 
+	/**
+	 * Same 503 exposure as handle_generate_next() below (build_brief() calls
+	 * the Verlo SaaS, up to ~60s) - same fix, queued through Verlo_Async_Job
+	 * instead of blocking the request. Redirects straight to this article's
+	 * detail view (we already know its id) so the poll overlay shows there
+	 * rather than flashing the overview list first.
+	 */
 	public static function handle_generate() {
 		self::guard( 'verlo_brief_generate' );
 		$aid = (int) ( $_POST['article_id'] ?? 0 );
-		$res = Verlo_Strategist::build_brief( $aid );
-		if ( is_wp_error( $res ) ) {
-			self::redirect( 'Brief failed: ' . $res->get_error_message(), true, Verlo_SaaS_Client::is_billing_error( $res ) );
-		}
-		self::redirect_to_brief( $aid, 'Brief generated. Review and edit below.' );
+		Verlo_Async_Job::queue( 'brief-next', array( 'article_id' => $aid ) );
+		self::redirect_to_brief( $aid, '__working__' );
 	}
 
+	/**
+	 * Brief generation calls the Verlo SaaS and can take up to ~60s
+	 * (Verlo_SaaS_Client::run_job()'s timeout) - long enough to 503 on hosts
+	 * with a shorter proxy/PHP execution limit. pick_next() stays here,
+	 * synchronous: it only reads already-stored briefs/map state, no AI call,
+	 * so resolving the target article before queuing keeps the fast "nothing
+	 * left to brief" case instant. The actual build_brief() AI call now runs
+	 * in Verlo_Strategist::run_pending() via Verlo_Async_Job.
+	 */
 	public static function handle_generate_next() {
 		self::guard( 'verlo_brief_generate_next' );
 		$next = Verlo_Strategist::pick_next();
 		if ( ! $next ) { self::redirect( 'Every planned article already has a brief.' ); }
-		$res = Verlo_Strategist::build_brief( $next['id'] );
-		if ( is_wp_error( $res ) ) {
-			self::redirect( 'Brief failed: ' . $res->get_error_message(), true, Verlo_SaaS_Client::is_billing_error( $res ) );
-		}
-		self::redirect_to_brief( $next['id'], 'Brief generated for "' . $next['keyword'] . '". Review below.' );
+		Verlo_Async_Job::queue( 'brief-next', array( 'article_id' => $next['id'] ) );
+		self::redirect( '__working__' );
 	}
 
 	public static function handle_save() {
@@ -833,17 +845,22 @@ class Verlo_Brief_Admin {
 		Verlo_Brief::save( $aid, $b );
 
 		// "Save & next": save this brief, then generate the next one and open it.
+		// The generate step is the same ~60s SaaS call as handle_generate_next()
+		// - queued through Verlo_Async_Job for the same reason (see that
+		// handler's docblock). One accepted fidelity trade-off: if the queued
+		// generation itself errors, the error lands on the overview page
+		// rather than back on this specific brief ($aid) the way the old
+		// synchronous version did - a minor UX difference on an already-rare
+		// failure path, not worth the extra plumbing to thread $aid through
+		// the generic async status response just for the error branch.
 		if ( 'next' === ( $_POST['then'] ?? '' ) ) {
 			$prefix = empty( $dropped ) ? 'Brief saved. ' : 'Brief saved (removed ' . count( $dropped ) . ' off-site link(s)). ';
 			$next   = Verlo_Strategist::pick_next();
 			if ( ! $next ) {
 				self::redirect_to_brief( $aid, $prefix . 'Every planned article now has a brief.' );
 			}
-			$res = Verlo_Strategist::build_brief( $next['id'] );
-			if ( is_wp_error( $res ) ) {
-				self::redirect_to_brief( $aid, $prefix . 'Could not start the next brief: ' . $res->get_error_message(), true, Verlo_SaaS_Client::is_billing_error( $res ) );
-			}
-			self::redirect_to_brief( $next['id'], 'Brief generated for "' . $next['keyword'] . '". Review below.' );
+			Verlo_Async_Job::queue( 'brief-next', array( 'article_id' => $next['id'], 'prefix' => $prefix ) );
+			self::redirect( '__working__' );
 		}
 
 		if ( ! empty( $dropped ) ) {

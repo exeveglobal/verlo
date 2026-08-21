@@ -47,7 +47,9 @@ class Verlo_Map_Admin {
 			</h1>
 			<p style="margin-top:2px;color:#646970;">Pillars become categories; the articles beneath them are the committed content roadmap. Nothing generates until this map is approved.</p>
 
-			<?php if ( $notice ) : ?>
+			<?php if ( '__working__' === $notice ) : ?>
+				<?php Verlo_Async_Job::render_poll_bootstrap( 'topical-map', 'map', admin_url( 'admin.php?page=verlo-map' ) ); ?>
+			<?php elseif ( $notice ) : ?>
 				<div class="notice <?php echo $is_error ? 'notice-error' : 'notice-success'; ?> is-dismissible"><p>
 					<?php echo esc_html( $notice ); ?>
 					<?php if ( $link_billing ) : ?>
@@ -265,15 +267,22 @@ class Verlo_Map_Admin {
 
 	/* ----- handlers ----- */
 
+	/**
+	 * Map generation calls the Verlo SaaS and can take up to ~90s
+	 * (Verlo_SaaS_Client::run_job()'s timeout, the longest of the plugin's
+	 * three site-level AI calls) - long enough to 503 on hosts with a
+	 * shorter proxy/PHP execution limit. Queuing through Verlo_Async_Job
+	 * returns control to the browser immediately; the actual force+generate
+	 * sequence (unchanged) now runs in Verlo_Topical_Map::run_pending().
+	 */
 	public static function handle_generate() {
 		self::guard( 'verlo_map_generate' );
-		$force = ! empty( $_POST['force'] );
-		if ( $force ) { Verlo_Topical_Map::reopen(); }
-		$res = Verlo_Topical_Map::generate();
-		if ( is_wp_error( $res ) ) {
-			self::redirect( 'Map generation failed: ' . $res->get_error_message(), true, Verlo_SaaS_Client::is_billing_error( $res ) );
+		if ( ! Verlo_Auth::is_connected() ) {
+			self::redirect( 'Connect Verlo first under Strategy Profile → Verlo connection.', true );
 		}
-		self::redirect( 'Draft map generated. Review the pillars below, edit as needed, then Approve.' );
+		$force = ! empty( $_POST['force'] );
+		Verlo_Async_Job::queue( 'topical-map', array( 'force' => $force ) );
+		self::redirect( '__working__' );
 	}
 
 	public static function handle_approve() {

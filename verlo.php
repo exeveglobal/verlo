@@ -3,7 +3,7 @@
  * Plugin Name:       Verlo
  * Plugin URI:        https://exeve.global/
  * Description:       Verlo plans, writes, and optimizes SEO content for your site, end to end. It builds a knowledge graph of your existing content, designs a topical map of pillars and planned articles, turns each into a content brief, and generates publish-ready, human-quality draft articles, complete with on-page SEO, internal links, and stock images, for your review before publishing.
- * Version:           1.1.18
+ * Version:           1.1.19
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            EXEVE
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'VERLO_VERSION', '1.1.18' );
+define( 'VERLO_VERSION', '1.1.19' );
 define( 'VERLO_FILE', __FILE__ );
 define( 'VERLO_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VERLO_URL', plugin_dir_url( __FILE__ ) );
@@ -54,6 +54,7 @@ require_once VERLO_DIR . 'includes/class-verlo-brief.php';
 require_once VERLO_DIR . 'includes/class-verlo-strategist.php';
 require_once VERLO_DIR . 'includes/class-verlo-faq-schema.php';
 require_once VERLO_DIR . 'includes/class-verlo-generator.php';
+require_once VERLO_DIR . 'includes/class-verlo-async-job.php';
 require_once VERLO_DIR . 'includes/class-verlo-images.php';
 require_once VERLO_DIR . 'admin/class-verlo-admin.php';
 require_once VERLO_DIR . 'admin/class-verlo-onboarding-admin.php';
@@ -164,6 +165,7 @@ function verlo_plugin_row_meta( $links, $file ) {
 function verlo_deactivate() {
 	wp_clear_scheduled_hook( VERLO_HOOK_REBUILD_CONTINUE );
 	wp_clear_scheduled_hook( 'verlo_cron_generate' );
+	wp_clear_scheduled_hook( 'verlo_cron_async' );
 }
 register_deactivation_hook( __FILE__, 'verlo_deactivate' );
 
@@ -200,6 +202,13 @@ function verlo_boot() {
 	add_action( 'admin_post_verlo_run_generation', array( 'Verlo_Generator', 'run_background' ) );
 	add_action( 'admin_post_nopriv_verlo_run_generation', array( 'Verlo_Generator', 'run_background' ) );
 	add_action( 'verlo_cron_generate', array( 'Verlo_Generator', 'run_via_cron' ), 10, 1 );
+
+	// Background site-level jobs (analyze, topical map, next brief): same
+	// loopback/cron pattern, generalized - see class-verlo-async-job.php.
+	add_action( 'admin_post_verlo_run_async', array( 'Verlo_Async_Job', 'run_background' ) );
+	add_action( 'admin_post_nopriv_verlo_run_async', array( 'Verlo_Async_Job', 'run_background' ) );
+	add_action( 'verlo_cron_async', array( 'Verlo_Async_Job', 'run_via_cron' ), 10, 1 );
+	add_action( 'wp_ajax_verlo_async_status', array( 'Verlo_Async_Job', 'ajax_status' ) );
 
 	// Background-execution health probe (so we know whether this host runs
 	// async work, and can warn + adapt if it does not).
