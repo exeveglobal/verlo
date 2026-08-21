@@ -1,0 +1,52 @@
+# ==============================================================================
+# verlo (WordPress plugin) — dev-branch CI
+# Path in your repo: .github/workflows/ci.yml
+#
+# Three-tier flow for this repo:
+#   main (dev, no deploy) -> testnet (staging, FTP-deploys to the demo site,
+#   see staging-deploy.yml) -> production (approved/live, see release.yml)
+#
+# main itself never deploys anywhere, but still needs a lint gate so a
+# broken file doesn't reach testnet/production in the first place — this is
+# that gate. Same checks release.yml and staging-deploy.yml also run before
+# their own build step, so nothing merges into either without having passed
+# this first.
+# ==============================================================================
+name: Lint verlo plugin
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - testnet
+      - production
+  workflow_dispatch: {}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # A UTF-8 BOM in any PHP file gets echoed into every response and breaks
+      # WordPress's JSON/REST output site-wide (caused the invalid_json bug).
+      - name: Check for BOM and stray leading bytes
+        run: |
+          bad=0
+          while IFS= read -r f; do
+            if [ "$(head -c 5 "$f")" != "<?php" ]; then
+              echo "File does not start with <?php (BOM or stray bytes): $f"
+              bad=1
+            fi
+          done < <(find . -name '*.php' -not -path './.git/*')
+          exit $bad
+
+      - name: PHP syntax lint
+        run: |
+          bad=0
+          while IFS= read -r f; do
+            php -l "$f" > /dev/null || bad=1
+          done < <(find . -name '*.php' -not -path './.git/*')
+          exit $bad
