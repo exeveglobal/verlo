@@ -102,6 +102,7 @@ class Verlo_Brief_Admin {
 					<?php endif; ?>
 				</p></div>
 			<?php endif; ?>
+			<?php Verlo_Guided_Tour::maybe_render_banner( 'verlo-briefs' ); ?>
 			<?php
 			if ( ! Verlo_Topical_Map::is_approved() ) {
 				$map_url = admin_url( 'admin.php?page=verlo-map' );
@@ -137,7 +138,7 @@ class Verlo_Brief_Admin {
 				<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline">
 					<input type="hidden" name="action" value="verlo_brief_generate_next" />
 					<?php wp_nonce_field( 'verlo_brief_generate_next' ); ?>
-					<button type="submit" class="button button-primary" data-verlo-progress="Writing brief with Verlo…" data-verlo-phases="brief" <?php disabled( ! $next || ! $connected ); ?>>
+					<button type="submit" class="button button-primary" data-verlo-tour-target="brief-generate" data-verlo-progress="Writing brief with Verlo…" data-verlo-phases="brief" <?php disabled( ! $next || ! $connected ); ?>>
 						<?php echo $next ? 'Generate next brief' : 'All planned articles briefed'; ?>
 					</button>
 				</form>
@@ -499,7 +500,7 @@ class Verlo_Brief_Admin {
 						<input type="hidden" name="action" value="verlo_brief_generate_article" />
 						<input type="hidden" name="article_id" value="<?php echo (int) $aid; ?>" />
 						<?php wp_nonce_field( 'verlo_brief_generate_article' ); ?>
-						<button type="submit" class="button button-primary button-hero" <?php disabled( ! $connected ); ?> data-verlo-async="1">✍ Generate draft article</button>
+						<button type="submit" class="button button-primary button-hero" data-verlo-tour-target="article-generate" <?php disabled( ! $connected ); ?> data-verlo-async="1">✍ Generate draft article</button>
 					</form>
 					<?php if ( ! $connected ) : ?><span class="description">Connect your Verlo license first.</span><?php endif; ?>
 				</div>

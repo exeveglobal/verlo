@@ -55,6 +55,7 @@ class Verlo_Map_Admin {
 					<?php endif; ?>
 				</p></div>
 			<?php endif; ?>
+			<?php Verlo_Guided_Tour::maybe_render_banner( 'verlo-map' ); ?>
 
 			<div class="notice notice-warning inline" style="margin:14px 0;border-left-color:#dba617;"><p style="margin:.5em 0;">
 				<strong>Review coverage before approving.</strong> "Covered" badges are a lexical signal and can miss synonym or closely-related cases
@@ -102,7 +103,7 @@ class Verlo_Map_Admin {
 						<input type="hidden" name="action" value="verlo_map_generate" />
 						<?php wp_nonce_field( 'verlo_map_generate' ); ?>
 						<?php if ( $approved ) : ?><input type="hidden" name="force" value="1" /><?php endif; ?>
-						<button type="submit" class="button <?php echo $map['pillars'] ? '' : 'button-primary'; ?>" data-verlo-progress="Designing your topical map with Verlo…" data-verlo-phases="map" <?php disabled( ! $connected ); ?>>Generate map with Verlo<?php echo $map['pillars'] ? ' (replace draft)' : ''; ?></button>
+						<button type="submit" class="button <?php echo $map['pillars'] ? '' : 'button-primary'; ?>" data-verlo-tour-target="map-generate" data-verlo-progress="Designing your topical map with Verlo…" data-verlo-phases="map" <?php disabled( ! $connected ); ?>>Generate map with Verlo<?php echo $map['pillars'] ? ' (replace draft)' : ''; ?></button>
 					</form>
 					<?php if ( ! $connected ) : ?>
 						<span class="description">Connect your Verlo license first.</span>
@@ -116,7 +117,7 @@ class Verlo_Map_Admin {
 						<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline">
 							<input type="hidden" name="action" value="verlo_map_approve" />
 							<?php wp_nonce_field( 'verlo_map_approve' ); ?>
-							<button type="submit" class="button button-primary">Approve map</button>
+							<button type="submit" class="button button-primary" data-verlo-tour-target="map-approve">Approve map</button>
 						</form>
 						<span class="description">Approval creates any missing categories (additive only) and unlocks content generation.</span>
 					<?php elseif ( $approved ) : ?>
