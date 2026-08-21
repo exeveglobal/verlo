@@ -3,13 +3,14 @@
  * Plugin Name:       Verlo
  * Plugin URI:        https://exeve.global/
  * Description:       Verlo plans, writes, and optimizes SEO content for your site, end to end. It builds a knowledge graph of your existing content, designs a topical map of pillars and planned articles, turns each into a content brief, and generates publish-ready, human-quality draft articles, complete with on-page SEO, internal links, and stock images, for your review before publishing.
- * Version:           1.1.18
+ * Version:           1.1.20
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            EXEVE
  * Author URI:        https://exeve.global/
  * License:           GPL-2.0-or-later
  * Text Domain:       verlo
+ * Domain Path:       /languages
  *
  * Verlo v1.0 — initial release.
  * Core pipeline: Knowledge Graph -> Strategy Profile -> Topical Map ->
@@ -21,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'VERLO_VERSION', '1.1.18' );
+define( 'VERLO_VERSION', '1.1.20' );
 define( 'VERLO_FILE', __FILE__ );
 define( 'VERLO_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VERLO_URL', plugin_dir_url( __FILE__ ) );
@@ -54,6 +55,7 @@ require_once VERLO_DIR . 'includes/class-verlo-brief.php';
 require_once VERLO_DIR . 'includes/class-verlo-strategist.php';
 require_once VERLO_DIR . 'includes/class-verlo-faq-schema.php';
 require_once VERLO_DIR . 'includes/class-verlo-generator.php';
+require_once VERLO_DIR . 'includes/class-verlo-async-job.php';
 require_once VERLO_DIR . 'includes/class-verlo-images.php';
 require_once VERLO_DIR . 'admin/class-verlo-admin.php';
 require_once VERLO_DIR . 'admin/class-verlo-onboarding-admin.php';
@@ -144,7 +146,7 @@ add_action( 'admin_init', 'verlo_activation_redirect' );
  */
 add_filter( 'plugin_action_links_' . plugin_basename( VERLO_FILE ), 'verlo_plugin_action_links' );
 function verlo_plugin_action_links( $links ) {
-	array_unshift( $links, '<a href="' . esc_url( VERLO_DOCS_URL ) . '" target="_blank" rel="noopener noreferrer">Docs</a>' );
+	array_unshift( $links, '<a href="' . esc_url( VERLO_DOCS_URL ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Docs', 'verlo' ) . '</a>' );
 	return $links;
 }
 
@@ -153,8 +155,8 @@ function verlo_plugin_row_meta( $links, $file ) {
 	if ( plugin_basename( VERLO_FILE ) !== $file ) {
 		return $links;
 	}
-	$links[] = '<a href="' . esc_url( VERLO_DOCS_URL ) . '" target="_blank" rel="noopener noreferrer">Documentation</a>';
-	$links[] = '<a href="mailto:support@verlohub.com">Support</a>';
+	$links[] = '<a href="' . esc_url( VERLO_DOCS_URL ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Documentation', 'verlo' ) . '</a>';
+	$links[] = '<a href="mailto:support@verlohub.com">' . esc_html__( 'Support', 'verlo' ) . '</a>';
 	return $links;
 }
 
@@ -164,6 +166,7 @@ function verlo_plugin_row_meta( $links, $file ) {
 function verlo_deactivate() {
 	wp_clear_scheduled_hook( VERLO_HOOK_REBUILD_CONTINUE );
 	wp_clear_scheduled_hook( 'verlo_cron_generate' );
+	wp_clear_scheduled_hook( 'verlo_cron_async' );
 }
 register_deactivation_hook( __FILE__, 'verlo_deactivate' );
 
@@ -186,6 +189,17 @@ function verlo_maybe_upgrade() {
 }
 
 /**
+ * Loads translations for the "verlo" text domain from /languages. Plugins
+ * hosted on WordPress.org get this for free since 4.6; a plugin distributed
+ * outside .org (this one) still needs the explicit call for a shipped
+ * .mo/.po translation to actually be found and used.
+ */
+function verlo_load_textdomain() {
+	load_plugin_textdomain( 'verlo', false, dirname( plugin_basename( VERLO_FILE ) ) . '/languages' );
+}
+add_action( 'plugins_loaded', 'verlo_load_textdomain' );
+
+/**
  * Boot runtime hooks.
  */
 function verlo_boot() {
@@ -200,6 +214,13 @@ function verlo_boot() {
 	add_action( 'admin_post_verlo_run_generation', array( 'Verlo_Generator', 'run_background' ) );
 	add_action( 'admin_post_nopriv_verlo_run_generation', array( 'Verlo_Generator', 'run_background' ) );
 	add_action( 'verlo_cron_generate', array( 'Verlo_Generator', 'run_via_cron' ), 10, 1 );
+
+	// Background site-level jobs (analyze, topical map, next brief): same
+	// loopback/cron pattern, generalized - see class-verlo-async-job.php.
+	add_action( 'admin_post_verlo_run_async', array( 'Verlo_Async_Job', 'run_background' ) );
+	add_action( 'admin_post_nopriv_verlo_run_async', array( 'Verlo_Async_Job', 'run_background' ) );
+	add_action( 'verlo_cron_async', array( 'Verlo_Async_Job', 'run_via_cron' ), 10, 1 );
+	add_action( 'wp_ajax_verlo_async_status', array( 'Verlo_Async_Job', 'ajax_status' ) );
 
 	// Background-execution health probe (so we know whether this host runs
 	// async work, and can warn + adapt if it does not).
