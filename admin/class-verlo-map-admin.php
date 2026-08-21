@@ -103,8 +103,9 @@ class Verlo_Map_Admin {
 						<input type="hidden" name="action" value="verlo_map_generate" />
 						<?php wp_nonce_field( 'verlo_map_generate' ); ?>
 						<?php if ( $approved ) : ?><input type="hidden" name="force" value="1" /><?php endif; ?>
-						<button type="submit" class="button <?php echo $map['pillars'] ? '' : 'button-primary'; ?>" data-verlo-tour-target="map-generate" data-verlo-progress="Designing your topical map with Verlo…" data-verlo-phases="map" <?php disabled( ! $connected ); ?>>Generate map with Verlo<?php echo $map['pillars'] ? ' (replace draft)' : ''; ?></button>
+						<button type="submit" class="button <?php echo $map['pillars'] ? '' : 'button-primary'; ?>" data-verlo-tour-target="map-generate"<?php echo Verlo_Guided_Tour::target_id_attr( 'map-generate' ); ?> data-verlo-progress="Designing your topical map with Verlo…" data-verlo-phases="map" <?php disabled( ! $connected ); ?>>Generate map with Verlo<?php echo $map['pillars'] ? ' (replace draft)' : ''; ?></button>
 					</form>
+					<?php Verlo_Guided_Tour::render_target_callout( 'map-generate' ); ?>
 					<?php if ( ! $connected ) : ?>
 						<span class="description">Connect your Verlo license first.</span>
 					<?php endif; ?>
@@ -117,8 +118,9 @@ class Verlo_Map_Admin {
 						<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline">
 							<input type="hidden" name="action" value="verlo_map_approve" />
 							<?php wp_nonce_field( 'verlo_map_approve' ); ?>
-							<button type="submit" class="button button-primary" data-verlo-tour-target="map-approve">Approve map</button>
+							<button type="submit" class="button button-primary" data-verlo-tour-target="map-approve"<?php echo Verlo_Guided_Tour::target_id_attr( 'map-approve' ); ?>>Approve map</button>
 						</form>
+						<?php Verlo_Guided_Tour::render_target_callout( 'map-approve' ); ?>
 						<span class="description">Approval creates any missing categories (additive only) and unlocks content generation.</span>
 					<?php elseif ( $approved ) : ?>
 						<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline">
