@@ -134,6 +134,20 @@ class Verlo_Onboarding_Admin {
 				<?php endif; ?>
 			</p>
 
+			<?php if ( $done_count < $total ) : ?>
+				<div style="background:linear-gradient(135deg,#15181a 0%,#2b3134 100%);border-radius:12px;padding:20px 24px;margin:20px 0 4px;max-width:640px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+					<div>
+						<p style="margin:0;color:#fff;font-size:15px;font-weight:700;">New here? Get a hands-on walkthrough.</p>
+						<p style="margin:4px 0 0;color:rgba(255,255,255,.75);font-size:13px;">
+							<?php echo Verlo_Guided_Tour::is_active() ? 'A guided setup is already in progress.' : "We'll take you to each page in order and point at exactly what to click — nothing happens automatically, you're doing the real setup."; ?>
+						</p>
+					</div>
+					<a href="<?php echo esc_url( Verlo_Guided_Tour::start_url() ); ?>" class="button button-hero" style="background:#fff;color:#15181a;border:none;flex:none;">
+						<?php echo Verlo_Guided_Tour::is_active() ? 'Resume guided setup →' : 'Start guided setup →'; ?>
+					</a>
+				</div>
+			<?php endif; ?>
+
 			<ol style="list-style:none;margin:24px 0 0;padding:0;max-width:640px;">
 				<?php foreach ( $steps as $i => $step ) : ?>
 					<li style="display:flex;align-items:flex-start;gap:14px;padding:16px 0;border-top:1px solid #dcdcde;">
