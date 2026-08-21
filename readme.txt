@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.15
+Stable tag: 1.1.16
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,10 @@ Yes, but a key is only active on one site at a time. Remove it from the current 
 Verlo doesn't expose which AI provider or model it uses in any part of the plugin, its output, or its support channels — this is intentional and not configurable.
 
 == Changelog ==
+
+= 1.1.16 =
+* Generated articles now carry FAQ structured data (schema markup), built directly from the actual FAQ section on the page so it always matches what's visible, never a separate list that could drift out of sync.
+* In-body and featured images now get real, descriptive alt text (from the photo itself) instead of the same bare keyword repeated across every image in an article.
 
 = 1.1.15 =
 * Restyled the Getting Started page to match every other admin screen's card-based layout instead of its own bespoke look.

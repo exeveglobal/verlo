@@ -375,7 +375,11 @@ class Verlo_Generator {
 		$content = self::sanitize_content( $parsed['content'], $brief );
 		$content = Verlo_Text::scrub_stale_years( $content );
 		$content = Verlo_Text::humanize( $content );
-		$blocks  = self::to_blocks( $content );
+		// Extract the FAQ schema from the same clean HTML the reader will see
+		// (before to_blocks() below rewrites it as Gutenberg block comments) so
+		// the structured data can never drift from what's actually on the page.
+		$faq_schema = class_exists( 'Verlo_Faq_Schema' ) ? Verlo_Faq_Schema::build( $content ) : '';
+		$blocks  = self::to_blocks( $content ) . $faq_schema;
 		$timing['process_s'] = round( microtime( true ) - $t, 1 );
 
 		// Resolve the pillar's category (additive; should already exist post-approval).
