@@ -138,12 +138,13 @@ class Verlo_Brief_Admin {
 				<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline">
 					<input type="hidden" name="action" value="verlo_brief_generate_next" />
 					<?php wp_nonce_field( 'verlo_brief_generate_next' ); ?>
-					<button type="submit" class="button button-primary" data-verlo-tour-target="brief-generate" data-verlo-progress="Writing brief with Verlo…" data-verlo-phases="brief" <?php disabled( ! $next || ! $connected ); ?>>
+					<button type="submit" class="button button-primary" data-verlo-tour-target="brief-generate"<?php echo Verlo_Guided_Tour::target_id_attr( 'brief-generate' ); ?> data-verlo-progress="Writing brief with Verlo…" data-verlo-phases="brief" <?php disabled( ! $next || ! $connected ); ?>>
 						<?php echo $next ? 'Generate next brief' : 'All planned articles briefed'; ?>
 					</button>
 				</form>
 				<?php if ( $next ) : ?><span class="description">Next: <strong><?php echo esc_html( $next['keyword'] ); ?></strong></span><?php endif; ?>
 				<?php if ( ! $connected ) : ?><span class="description">Connect your Verlo license first.</span><?php endif; ?>
+				<?php Verlo_Guided_Tour::render_target_callout( 'brief-generate' ); ?>
 			</div>
 		</div>
 
@@ -500,8 +501,9 @@ class Verlo_Brief_Admin {
 						<input type="hidden" name="action" value="verlo_brief_generate_article" />
 						<input type="hidden" name="article_id" value="<?php echo (int) $aid; ?>" />
 						<?php wp_nonce_field( 'verlo_brief_generate_article' ); ?>
-						<button type="submit" class="button button-primary button-hero" data-verlo-tour-target="article-generate" <?php disabled( ! $connected ); ?> data-verlo-async="1">✍ Generate draft article</button>
+						<button type="submit" class="button button-primary button-hero" data-verlo-tour-target="article-generate"<?php echo Verlo_Guided_Tour::target_id_attr( 'article-generate' ); ?> <?php disabled( ! $connected ); ?> data-verlo-async="1">✍ Generate draft article</button>
 					</form>
+					<?php Verlo_Guided_Tour::render_target_callout( 'article-generate' ); ?>
 					<?php if ( ! $connected ) : ?><span class="description">Connect your Verlo license first.</span><?php endif; ?>
 				</div>
 			<?php endif; ?>

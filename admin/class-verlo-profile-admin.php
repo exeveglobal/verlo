@@ -235,7 +235,7 @@ class Verlo_Profile_Admin {
 							<button type="submit" class="button button-secondary" onclick="return confirm('Disconnect Verlo? Content generation will stop until you reconnect.');">Disconnect</button>
 						</form>
 					<?php else : ?>
-						<div data-verlo-tour-target="connect">
+						<div data-verlo-tour-target="connect"<?php echo Verlo_Guided_Tour::target_id_attr( 'connect' ); ?>>
 						<p class="verlo-sub">Connect your Verlo account — no need to find and paste a license key.</p>
 						<div class="verlo-actions" style="margin-bottom:16px;">
 							<a class="button button-primary button-hero" href="<?php echo esc_url( self::connect_start_url() ); ?>">Connect with Verlo</a>
@@ -254,6 +254,7 @@ class Verlo_Profile_Admin {
 							</div>
 						</form>
 						</div>
+						<?php Verlo_Guided_Tour::render_target_callout( 'connect' ); ?>
 					<?php endif; ?>
 				</div>
 
@@ -293,11 +294,12 @@ class Verlo_Profile_Admin {
 						<input type="hidden" name="action" value="verlo_analyze" />
 						<?php wp_nonce_field( 'verlo_analyze' ); ?>
 						<div class="verlo-actions">
-							<button type="submit" class="button button-primary" data-verlo-tour-target="profile-analyze" data-verlo-progress="Analyzing your site with Verlo…" data-verlo-phases="analyze" <?php disabled( ! $connected ); ?>>Analyze my site with Verlo</button>
+							<button type="submit" class="button button-primary" data-verlo-tour-target="profile-analyze"<?php echo Verlo_Guided_Tour::target_id_attr( 'profile-analyze' ); ?> data-verlo-progress="Analyzing your site with Verlo…" data-verlo-phases="analyze" <?php disabled( ! $connected ); ?>>Analyze my site with Verlo</button>
 							<?php if ( ! $connected ) : ?>
 								<span class="description">Connect your Verlo license first.</span>
 							<?php endif; ?>
 						</div>
+						<?php Verlo_Guided_Tour::render_target_callout( 'profile-analyze' ); ?>
 					</form>
 					<p class="verlo-meta">
 						<?php
