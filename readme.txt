@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.12
+Stable tag: 1.1.15
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,15 @@ Yes, but a key is only active on one site at a time. Remove it from the current 
 Verlo doesn't expose which AI provider or model it uses in any part of the plugin, its output, or its support channels — this is intentional and not configurable.
 
 == Changelog ==
+
+= 1.1.15 =
+* Restyled the Getting Started page to match every other admin screen's card-based layout instead of its own bespoke look.
+
+= 1.1.14 =
+* Added a hands-on guided setup walkthrough — "Start guided setup" on the Getting Started page takes you to each real page in order (connect, strategy profile, topical map, briefs, first article) and highlights exactly what to click there. Nothing is automated — every step is still a real click you make yourself, at your own pace, skippable any time.
+
+= 1.1.13 =
+* Fixed the "Getting Started" page 404ing when clicked from the sidebar — its menu registration was racing ahead of the main Verlo menu's own registration, which broke how WordPress routes the click.
 
 = 1.1.12 =
 * Regenerating an article no longer risks losing what was there before: every version's actual content is now saved (not just its title/timestamp), with a "View diff" link showing exactly what changed and a one-click "Restore" to bring back any past version. Restoring is itself recorded as a new version, so nothing — including what was live right before a restore — is ever truly lost.

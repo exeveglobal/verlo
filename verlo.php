@@ -3,7 +3,7 @@
  * Plugin Name:       Verlo
  * Plugin URI:        https://exeve.global/
  * Description:       Verlo plans, writes, and optimizes SEO content for your site, end to end. It builds a knowledge graph of your existing content, designs a topical map of pillars and planned articles, turns each into a content brief, and generates publish-ready, human-quality draft articles, complete with on-page SEO, internal links, and stock images, for your review before publishing.
- * Version:           1.1.12
+ * Version:           1.1.15
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            EXEVE
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'VERLO_VERSION', '1.1.12' );
+define( 'VERLO_VERSION', '1.1.15' );
 define( 'VERLO_FILE', __FILE__ );
 define( 'VERLO_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VERLO_URL', plugin_dir_url( __FILE__ ) );
@@ -56,6 +56,7 @@ require_once VERLO_DIR . 'includes/class-verlo-generator.php';
 require_once VERLO_DIR . 'includes/class-verlo-images.php';
 require_once VERLO_DIR . 'admin/class-verlo-admin.php';
 require_once VERLO_DIR . 'admin/class-verlo-onboarding-admin.php';
+require_once VERLO_DIR . 'admin/class-verlo-guided-tour.php';
 require_once VERLO_DIR . 'admin/class-verlo-profile-admin.php';
 require_once VERLO_DIR . 'admin/class-verlo-map-admin.php';
 require_once VERLO_DIR . 'admin/class-verlo-brief-admin.php';
@@ -207,6 +208,7 @@ function verlo_boot() {
 	if ( is_admin() ) {
 		Verlo_Admin::init();
 		Verlo_Onboarding_Admin::init();
+		Verlo_Guided_Tour::init();
 		Verlo_Profile_Admin::init();
 		Verlo_Map_Admin::init();
 		Verlo_Brief_Admin::init();

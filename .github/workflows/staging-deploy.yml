@@ -47,17 +47,32 @@ jobs:
           done < <(find . -name '*.php' -not -path './.git/*')
           exit $bad
 
+      # --exclude='build' matters here: without it, mkdir creates build/verlo
+      # as an empty dir BEFORE rsync runs, and since that's inside the "./"
+      # source tree being copied, rsync copies that now-existing (originally
+      # empty, but present) build/ folder into itself too — a stray nested
+      # build/verlo/build/verlo/ ends up inside the packaged output and gets
+      # uploaded to the server. Confirmed live 2026-08-21 on the first real
+      # deploy. release.yml has the same latent bug — worth fixing there too.
       - name: Package plugin build
         run: |
           mkdir -p build/verlo
           rsync -a \
-            --exclude='.git' --exclude='.github' \
+            --exclude='.git' --exclude='.github' --exclude='build' \
             --exclude='CLAUDE.md' --exclude='.gitattributes' --exclude='.gitignore' \
             ./ build/verlo/
 
       # dangerous-clean-slate is deliberately left off (default) — this only
       # ever adds/updates files under the plugin's own folder, never deletes
       # anything on the server that isn't part of this build.
+      #
+      # server-dir is "/verlo", not "/" — confirmed live 2026-08-21: the
+      # FTP_USERNAME sub-account's real root is wp-content/plugins/ itself
+      # (it lists every other installed plugin — elementor, litespeed-cache,
+      # etc. — as siblings), NOT the verlo subfolder specifically. "/" alone
+      # would dump this plugin's loose files (admin/, includes/, verlo.php)
+      # directly into wp-content/plugins/, which WordPress doesn't recognize
+      # as a plugin and pollutes every other plugin's directory listing.
       - name: FTP deploy to demo site
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
@@ -67,4 +82,4 @@ jobs:
           port: 21
           protocol: ftp
           local-dir: build/verlo/
-          server-dir: public_html/sub_domains/flooringlk/wp-content/plugins/verlo/
+          server-dir: /verlo/
