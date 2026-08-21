@@ -186,33 +186,44 @@ class Verlo_Guided_Tour {
 		?>
 		<div class="verlo-tour-strip">
 			<div class="verlo-tour-progress"><div class="verlo-tour-progress-bar" style="width:<?php echo (int) $pct; ?>%;"></div></div>
-			<div class="verlo-tour-strip-body">
+			<div class="verlo-tour-strip-top">
 				<span class="verlo-tour-step-badge">Step <?php echo (int) ( $stop['index'] + 1 ); ?> of <?php echo (int) $total; ?></span>
 				<span class="verlo-tour-strip-title"><?php echo esc_html( $stop['title'] ); ?></span>
 				<a href="#verlo-tour-target" class="verlo-tour-jump">Take me there &darr;</a>
 				<a href="<?php echo esc_url( self::skip_url() ); ?>" class="verlo-tour-skip">Skip guided setup</a>
 			</div>
+			<p class="verlo-tour-strip-desc"><?php echo esc_html( $stop['body'] ); ?></p>
 		</div>
 		<style>
-			.verlo-tour-strip{background:linear-gradient(135deg,#15181a 0%,#2b3134 100%);border-radius:12px;padding:12px 18px;margin:16px 0 20px;color:#fff;}
-			.verlo-tour-progress{height:4px;background:rgba(255,255,255,.15);border-radius:999px;margin-bottom:10px;overflow:hidden;}
+			.verlo-tour-strip{background:linear-gradient(135deg,#15181a 0%,#2b3134 100%);border-radius:12px;padding:14px 18px;margin:16px 0 20px;color:#fff;}
+			.verlo-tour-progress{height:4px;background:rgba(255,255,255,.15);border-radius:999px;margin-bottom:12px;overflow:hidden;}
 			.verlo-tour-progress-bar{height:100%;background:#5fd68a;border-radius:999px;transition:width .3s ease;}
-			.verlo-tour-strip-body{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:13px;}
+			.verlo-tour-strip-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:13px;}
 			.verlo-tour-strip .verlo-tour-step-badge{flex:none;background:rgba(255,255,255,.14);padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.02em;}
 			.verlo-tour-strip-title{font-weight:600;flex:1;min-width:140px;}
 			.verlo-tour-jump{flex:none;color:#8ecbff;text-decoration:underline;text-underline-offset:2px;font-weight:600;}
 			.verlo-tour-jump:hover{color:#fff;}
 			.verlo-tour-strip .verlo-tour-skip{flex:none;color:rgba(255,255,255,.6);text-decoration:underline;text-underline-offset:2px;}
 			.verlo-tour-strip .verlo-tour-skip:hover{color:#fff;}
+			.verlo-tour-strip-desc{margin:8px 0 0;font-size:13px;color:rgba(255,255,255,.75);line-height:1.45;}
 
-			/* Callout pinned next to the real element — see render_target_callout(). */
-			.verlo-tour-callout{position:relative;background:#fff;border:1px solid #d8dade;border-left:3px solid #2271b1;border-radius:8px;padding:14px 16px;margin:12px 0 4px;max-width:420px;box-shadow:0 4px 14px rgba(0,0,0,.08);}
-			.verlo-tour-callout-arrow{position:absolute;top:-7px;left:20px;width:12px;height:12px;background:#fff;border-left:1px solid #d8dade;border-top:1px solid #d8dade;transform:rotate(45deg);}
-			.verlo-tour-callout .verlo-tour-step-badge{display:inline-block;background:#eef4fb;color:#2271b1;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;margin-bottom:6px;}
-			.verlo-tour-callout .verlo-tour-title{margin:0 0 2px;font-size:14px;font-weight:700;color:#1d2327;}
-			.verlo-tour-callout .verlo-tour-desc{margin:0 0 8px;font-size:13px;color:#50575e;line-height:1.4;}
-			.verlo-tour-callout .verlo-tour-skip{font-size:12px;color:#787c82;text-decoration:underline;text-underline-offset:2px;}
-			.verlo-tour-callout .verlo-tour-skip:hover{color:#1d2327;}
+			/* Floating popup — pinned near the real element via JS, NOT part of
+			   page flow (see render_target_callout()). Starts hidden/offset so
+			   it never flashes at (0,0) before positioning runs. */
+			.verlo-tour-popup{position:fixed;z-index:99999;background:#fff;border:1px solid #d8dade;border-radius:10px;padding:16px 18px;max-width:320px;box-shadow:0 10px 30px rgba(0,0,0,.18);opacity:0;transform:translateY(4px);transition:opacity .18s ease,transform .18s ease;pointer-events:none;}
+			.verlo-tour-popup.is-visible{opacity:1;transform:translateY(0);pointer-events:auto;animation:verlo-tour-popup-pulse 1.8s ease-in-out infinite;}
+			.verlo-tour-popup-arrow{position:absolute;left:20px;width:14px;height:14px;background:#fff;border-left:1px solid #d8dade;border-top:1px solid #d8dade;transform:rotate(45deg);}
+			.verlo-tour-popup--below .verlo-tour-popup-arrow{top:-7px;}
+			.verlo-tour-popup--above .verlo-tour-popup-arrow{bottom:-7px;top:auto;transform:rotate(225deg);}
+			.verlo-tour-popup .verlo-tour-step-badge{display:inline-block;background:#eef4fb;color:#2271b1;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;margin-bottom:6px;}
+			.verlo-tour-popup .verlo-tour-title{margin:0 0 2px;font-size:14px;font-weight:700;color:#1d2327;}
+			.verlo-tour-popup .verlo-tour-desc{margin:0 0 10px;font-size:13px;color:#50575e;line-height:1.45;}
+			.verlo-tour-popup .verlo-tour-skip{font-size:12px;color:#787c82;text-decoration:underline;text-underline-offset:2px;}
+			.verlo-tour-popup .verlo-tour-skip:hover{color:#1d2327;}
+			@keyframes verlo-tour-popup-pulse{
+				0%,100%{box-shadow:0 10px 30px rgba(0,0,0,.18), 0 0 0 0 rgba(34,113,177,.55);}
+				50%{box-shadow:0 10px 30px rgba(0,0,0,.18), 0 0 0 8px rgba(34,113,177,0);}
+			}
 
 			[data-verlo-tour-target="<?php echo esc_attr( $stop['target'] ); ?>"]{
 				position:relative;
@@ -228,23 +239,54 @@ class Verlo_Guided_Tour {
 	}
 
 	/**
-	 * The actual instructional tooltip, rendered by the page immediately
-	 * after the real element it refers to (see target_id_attr() callers).
-	 * A no-op unless $target is the current stop, so it's safe to call
-	 * unconditionally next to every possible tour target on a page.
+	 * The actual instructional tooltip for the current stop — a floating
+	 * popup positioned by JS against the real element (see
+	 * target_id_attr() callers), deliberately NOT inserted into page flow
+	 * so it never pushes surrounding content around. Rendered by the page
+	 * immediately after the real element it refers to (that adjacency is
+	 * just where the markup lives in the DOM; CSS/JS is what actually
+	 * places it). A no-op unless $target is the current stop, so it's safe
+	 * to call unconditionally next to every possible tour target on a page.
 	 */
 	public static function render_target_callout( $target ) {
 		if ( ! self::is_current_target( $target ) ) { return; }
 		$stop  = self::current_stop();
 		$total = count( self::stops() );
 		?>
-		<div class="verlo-tour-callout">
-			<div class="verlo-tour-callout-arrow"></div>
+		<div class="verlo-tour-popup" id="verlo-tour-popup">
+			<div class="verlo-tour-popup-arrow"></div>
 			<span class="verlo-tour-step-badge">Step <?php echo (int) ( $stop['index'] + 1 ); ?> of <?php echo (int) $total; ?></span>
 			<p class="verlo-tour-title"><?php echo esc_html( $stop['title'] ); ?></p>
 			<p class="verlo-tour-desc"><?php echo esc_html( $stop['body'] ); ?></p>
 			<a href="<?php echo esc_url( self::skip_url() ); ?>" class="verlo-tour-skip">Skip guided setup</a>
 		</div>
+		<script>
+		( function () {
+			var target = document.getElementById( 'verlo-tour-target' );
+			var popup  = document.getElementById( 'verlo-tour-popup' );
+			if ( ! target || ! popup ) { return; }
+
+			function position() {
+				var r  = target.getBoundingClientRect();
+				var pw = popup.offsetWidth;
+				var ph = popup.offsetHeight;
+				var above = ( r.bottom + 14 + ph > window.innerHeight - 16 ) && ( r.top - 14 - ph > 16 );
+				var top   = above ? ( r.top - ph - 14 ) : ( r.bottom + 14 );
+				var left  = Math.min( Math.max( 16, r.left ), window.innerWidth - pw - 16 );
+
+				popup.style.top  = top + 'px';
+				popup.style.left = left + 'px';
+				popup.classList.toggle( 'verlo-tour-popup--above', above );
+				popup.classList.toggle( 'verlo-tour-popup--below', ! above );
+				popup.classList.add( 'is-visible' );
+			}
+
+			target.scrollIntoView( { behavior: 'smooth', block: 'center' } );
+			setTimeout( position, 350 ); // after the smooth scroll settles
+			window.addEventListener( 'resize', position );
+			window.addEventListener( 'scroll', position, { passive: true } );
+		} )();
+		</script>
 		<?php
 	}
 
