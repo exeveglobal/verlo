@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.17
+Stable tag: 1.1.18
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,9 @@ Yes, but a key is only active on one site at a time. Remove it from the current 
 Verlo doesn't expose which AI provider or model it uses in any part of the plugin, its output, or its support channels — this is intentional and not configurable.
 
 == Changelog ==
+
+= 1.1.18 =
+* The guided tour's step instructions are now a floating popup pinned next to the real button, with a pulsing border to draw the eye — instead of being inserted into the page itself (which pushed content down). The progress strip at the top of the page also shows the step's full description again, not just its title.
 
 = 1.1.17 =
 * Reworked the guided setup walkthrough into a proper product tour: each step now shows an info box pinned directly next to the real button you need to click (like the onboarding tours in other SaaS dashboards), with a real "Take me there" link — previously the step description sat in a banner at the top of the page with no link connecting it to where you actually needed to click.
