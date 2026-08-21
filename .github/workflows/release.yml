@@ -54,11 +54,19 @@ jobs:
           done < <(find . -name '*.php' -not -path './.git/*')
           exit $bad
 
+      # --exclude='build' matters here: without it, mkdir creates build/verlo
+      # as an empty dir BEFORE rsync runs, and since that's inside the "./"
+      # source tree being copied, rsync copies that now-existing (originally
+      # empty, but present) build/ folder into itself too — confirmed live
+      # 2026-08-21: every release zip through v1.1.12 has a stray empty
+      # verlo/build/verlo/ inside it (harmless to plugin function, but messy
+      # — WordPress ignores unknown subdirectories, so this never broke
+      # anything for a customer, just shipped clutter).
       - name: Package plugin zip
         run: |
           mkdir -p build/verlo
           rsync -a \
-            --exclude='.git' --exclude='.github' \
+            --exclude='.git' --exclude='.github' --exclude='build' \
             --exclude='CLAUDE.md' --exclude='.gitattributes' --exclude='.gitignore' \
             ./ build/verlo/
           cd build && zip -r ../verlo.zip verlo && cd ..
