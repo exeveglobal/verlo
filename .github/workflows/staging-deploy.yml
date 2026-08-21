@@ -58,6 +58,12 @@ jobs:
       # dangerous-clean-slate is deliberately left off (default) — this only
       # ever adds/updates files under the plugin's own folder, never deletes
       # anything on the server that isn't part of this build.
+      #
+      # server-dir is "/", not the full absolute path — the FTP_USERNAME
+      # sub-account (u287906692.verlodemo) is already chrooted to
+      # public_html/sub_domains/flooringlk/wp-content/plugins/verlo/ as its
+      # own root, confirmed by the account owner. Anything else double-nests
+      # the path and uploads into the wrong place.
       - name: FTP deploy to demo site
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
@@ -67,4 +73,4 @@ jobs:
           port: 21
           protocol: ftp
           local-dir: build/verlo/
-          server-dir: public_html/sub_domains/flooringlk/wp-content/plugins/verlo/
+          server-dir: /
