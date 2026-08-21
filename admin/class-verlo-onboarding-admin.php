@@ -42,8 +42,8 @@ class Verlo_Onboarding_Admin {
 	public static function menu() {
 		add_submenu_page(
 			'verlo',
-			'Getting Started',
-			'Getting Started',
+			__( 'Getting Started', 'verlo' ),
+			__( 'Getting Started', 'verlo' ),
 			'manage_options',
 			self::SLUG,
 			array( __CLASS__, 'render' )
@@ -64,46 +64,46 @@ class Verlo_Onboarding_Admin {
 
 		return array(
 			array(
-				'title' => 'Connect your Verlo license',
-				'desc'  => 'Link this site to your Verlo account so it can talk to the Verlo service.',
+				'title' => __( 'Connect your Verlo license', 'verlo' ),
+				'desc'  => __( 'Link this site to your Verlo account so it can talk to the Verlo service.', 'verlo' ),
 				'done'  => Verlo_Auth::is_connected(),
 				'url'   => admin_url( 'admin.php?page=verlo-profile' ),
-				'cta'   => 'Connect',
+				'cta'   => __( 'Connect', 'verlo' ),
 			),
 			array(
-				'title' => 'Build your knowledge graph',
-				'desc'  => 'Verlo indexes your existing content so it can plan around what you already have, and link new articles to it.',
+				'title' => __( 'Build your knowledge graph', 'verlo' ),
+				'desc'  => __( 'Verlo indexes your existing content so it can plan around what you already have, and link new articles to it.', 'verlo' ),
 				'done'  => $kg['objects'] > 0,
 				'url'   => admin_url( 'admin.php?page=verlo' ),
-				'cta'   => 'View progress',
+				'cta'   => __( 'View progress', 'verlo' ),
 			),
 			array(
-				'title' => 'Complete your Strategy Profile',
-				'desc'  => 'Tell Verlo your niche, audience, and voice so what it writes actually sounds like you.',
+				'title' => __( 'Complete your Strategy Profile', 'verlo' ),
+				'desc'  => __( 'Tell Verlo your niche, audience, and voice so what it writes actually sounds like you.', 'verlo' ),
 				'done'  => Verlo_Profile::is_complete(),
 				'url'   => admin_url( 'admin.php?page=verlo-profile' ),
-				'cta'   => 'Fill in profile',
+				'cta'   => __( 'Fill in profile', 'verlo' ),
 			),
 			array(
-				'title' => 'Generate and approve a Topical Map',
-				'desc'  => 'A plan of content pillars and articles, built from your profile and knowledge graph.',
+				'title' => __( 'Generate and approve a Topical Map', 'verlo' ),
+				'desc'  => __( 'A plan of content pillars and articles, built from your profile and knowledge graph.', 'verlo' ),
 				'done'  => Verlo_Topical_Map::is_approved(),
 				'url'   => admin_url( 'admin.php?page=verlo-map' ),
-				'cta'   => $map['pillars'] > 0 ? 'Review map' : 'Generate map',
+				'cta'   => $map['pillars'] > 0 ? __( 'Review map', 'verlo' ) : __( 'Generate map', 'verlo' ),
 			),
 			array(
-				'title' => 'Generate your first content brief',
-				'desc'  => 'A structured outline for one planned article, generated from the topical map.',
+				'title' => __( 'Generate your first content brief', 'verlo' ),
+				'desc'  => __( 'A structured outline for one planned article, generated from the topical map.', 'verlo' ),
 				'done'  => Verlo_Brief::count() > 0,
 				'url'   => admin_url( 'admin.php?page=verlo-briefs' ),
-				'cta'   => 'Generate a brief',
+				'cta'   => __( 'Generate a brief', 'verlo' ),
 			),
 			array(
-				'title' => 'Generate your first article',
-				'desc'  => 'A publish-ready draft, written from the brief, waiting in your Posts list for your review.',
+				'title' => __( 'Generate your first article', 'verlo' ),
+				'desc'  => __( 'A publish-ready draft, written from the brief, waiting in your Posts list for your review.', 'verlo' ),
 				'done'  => Verlo_Article_Log::count() > 0,
 				'url'   => admin_url( 'admin.php?page=verlo-briefs' ),
-				'cta'   => 'Generate an article',
+				'cta'   => __( 'Generate an article', 'verlo' ),
 			),
 		);
 	}
@@ -123,14 +123,21 @@ class Verlo_Onboarding_Admin {
 		$total = count( $steps );
 		?>
 		<div class="wrap verlo-wrap">
-			<h1>Getting Started
-				<a href="<?php echo esc_url( VERLO_DOCS_URL ); ?>" target="_blank" rel="noopener noreferrer" class="page-title-action">Help &amp; Docs</a>
+			<h1><?php esc_html_e( 'Getting Started', 'verlo' ); ?>
+				<a href="<?php echo esc_url( VERLO_DOCS_URL ); ?>" target="_blank" rel="noopener noreferrer" class="page-title-action"><?php esc_html_e( 'Help & Docs', 'verlo' ); ?></a>
 			</h1>
 			<p class="verlo-sub">
 				<?php if ( $done_count === $total ) : ?>
-					You've completed the full Verlo pipeline at least once. This page always reflects where you stand — come back any time.
+					<?php esc_html_e( "You've completed the full Verlo pipeline at least once. This page always reflects where you stand — come back any time.", 'verlo' ); ?>
 				<?php else : ?>
-					<?php echo (int) $done_count; ?> of <?php echo (int) $total; ?> steps done. Work through these in order — each one builds on the last.
+					<?php
+					printf(
+						/* translators: 1: steps completed, 2: total steps */
+						esc_html__( '%1$d of %2$d steps done. Work through these in order — each one builds on the last.', 'verlo' ),
+						(int) $done_count,
+						(int) $total
+					);
+					?>
 				<?php endif; ?>
 			</p>
 
@@ -138,28 +145,37 @@ class Verlo_Onboarding_Admin {
 				<div class="verlo-card" style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
 					<div>
 						<h2 style="margin-bottom:2px;">
-							New here? Get a hands-on walkthrough
+							<?php esc_html_e( 'New here? Get a hands-on walkthrough', 'verlo' ); ?>
 							<?php if ( Verlo_Guided_Tour::is_active() ) : ?>
-								<span class="verlo-badge info">In progress</span>
+								<span class="verlo-badge info"><?php esc_html_e( 'In progress', 'verlo' ); ?></span>
 							<?php endif; ?>
 						</h2>
 						<p class="verlo-sub" style="margin-bottom:0;">
-							<?php echo Verlo_Guided_Tour::is_active() ? 'Pick up where you left off.' : "We'll take you to each page in order and point at exactly what to click — nothing happens automatically, you're doing the real setup."; ?>
+							<?php echo Verlo_Guided_Tour::is_active() ? esc_html__( 'Pick up where you left off.', 'verlo' ) : esc_html__( "We'll take you to each page in order and point at exactly what to click — nothing happens automatically, you're doing the real setup.", 'verlo' ); ?>
 						</p>
 					</div>
 					<a href="<?php echo esc_url( Verlo_Guided_Tour::start_url() ); ?>" class="button button-primary button-hero" style="flex:none;">
-						<?php echo Verlo_Guided_Tour::is_active() ? 'Resume guided setup →' : 'Start guided setup →'; ?>
+						<?php echo Verlo_Guided_Tour::is_active() ? esc_html__( 'Resume guided setup →', 'verlo' ) : esc_html__( 'Start guided setup →', 'verlo' ); ?>
 					</a>
 				</div>
 			<?php endif; ?>
 
 			<div class="verlo-card verlo-card-full">
 				<h2>
-					Setup checklist
+					<?php esc_html_e( 'Setup checklist', 'verlo' ); ?>
 					<?php if ( $done_count === $total ) : ?>
-						<span class="verlo-badge ok">Complete</span>
+						<span class="verlo-badge ok"><?php esc_html_e( 'Complete', 'verlo' ); ?></span>
 					<?php else : ?>
-						<span class="verlo-badge info"><?php echo (int) $done_count; ?> of <?php echo (int) $total; ?></span>
+						<span class="verlo-badge info">
+							<?php
+							printf(
+								/* translators: 1: steps completed, 2: total steps */
+								esc_html__( '%1$d of %2$d', 'verlo' ),
+								(int) $done_count,
+								(int) $total
+							);
+							?>
+						</span>
 					<?php endif; ?>
 				</h2>
 				<ol style="list-style:none;margin:6px 0 0;padding:0;">
@@ -176,7 +192,7 @@ class Verlo_Onboarding_Admin {
 							</div>
 							<div style="flex:0 0 auto;">
 								<a href="<?php echo esc_url( $step['url'] ); ?>" class="button<?php echo ( ! $step['done'] ) ? ' button-primary' : ''; ?>">
-									<?php echo esc_html( $step['done'] ? 'Review' : $step['cta'] ); ?>
+									<?php echo esc_html( $step['done'] ? __( 'Review', 'verlo' ) : $step['cta'] ); ?>
 								</a>
 							</div>
 						</li>

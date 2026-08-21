@@ -3,13 +3,14 @@
  * Plugin Name:       Verlo
  * Plugin URI:        https://exeve.global/
  * Description:       Verlo plans, writes, and optimizes SEO content for your site, end to end. It builds a knowledge graph of your existing content, designs a topical map of pillars and planned articles, turns each into a content brief, and generates publish-ready, human-quality draft articles, complete with on-page SEO, internal links, and stock images, for your review before publishing.
- * Version:           1.1.19
+ * Version:           1.1.20
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            EXEVE
  * Author URI:        https://exeve.global/
  * License:           GPL-2.0-or-later
  * Text Domain:       verlo
+ * Domain Path:       /languages
  *
  * Verlo v1.0 — initial release.
  * Core pipeline: Knowledge Graph -> Strategy Profile -> Topical Map ->
@@ -21,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'VERLO_VERSION', '1.1.19' );
+define( 'VERLO_VERSION', '1.1.20' );
 define( 'VERLO_FILE', __FILE__ );
 define( 'VERLO_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VERLO_URL', plugin_dir_url( __FILE__ ) );
@@ -145,7 +146,7 @@ add_action( 'admin_init', 'verlo_activation_redirect' );
  */
 add_filter( 'plugin_action_links_' . plugin_basename( VERLO_FILE ), 'verlo_plugin_action_links' );
 function verlo_plugin_action_links( $links ) {
-	array_unshift( $links, '<a href="' . esc_url( VERLO_DOCS_URL ) . '" target="_blank" rel="noopener noreferrer">Docs</a>' );
+	array_unshift( $links, '<a href="' . esc_url( VERLO_DOCS_URL ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Docs', 'verlo' ) . '</a>' );
 	return $links;
 }
 
@@ -154,8 +155,8 @@ function verlo_plugin_row_meta( $links, $file ) {
 	if ( plugin_basename( VERLO_FILE ) !== $file ) {
 		return $links;
 	}
-	$links[] = '<a href="' . esc_url( VERLO_DOCS_URL ) . '" target="_blank" rel="noopener noreferrer">Documentation</a>';
-	$links[] = '<a href="mailto:support@verlohub.com">Support</a>';
+	$links[] = '<a href="' . esc_url( VERLO_DOCS_URL ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Documentation', 'verlo' ) . '</a>';
+	$links[] = '<a href="mailto:support@verlohub.com">' . esc_html__( 'Support', 'verlo' ) . '</a>';
 	return $links;
 }
 
@@ -186,6 +187,17 @@ function verlo_maybe_upgrade() {
 	Verlo_Install::create_tables();
 	update_option( VERLO_OPT_DB_VERSION, VERLO_VERSION, '', 'yes' );
 }
+
+/**
+ * Loads translations for the "verlo" text domain from /languages. Plugins
+ * hosted on WordPress.org get this for free since 4.6; a plugin distributed
+ * outside .org (this one) still needs the explicit call for a shipped
+ * .mo/.po translation to actually be found and used.
+ */
+function verlo_load_textdomain() {
+	load_plugin_textdomain( 'verlo', false, dirname( plugin_basename( VERLO_FILE ) ) . '/languages' );
+}
+add_action( 'plugins_loaded', 'verlo_load_textdomain' );
 
 /**
  * Boot runtime hooks.

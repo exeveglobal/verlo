@@ -42,7 +42,7 @@ class Verlo_Guided_Tour {
 
 	public static function handle_start() {
 		if ( ! current_user_can( 'manage_options' ) || ! check_admin_referer( 'verlo_tour_start' ) ) {
-			wp_die( 'Permission denied.' );
+			wp_die( esc_html__( 'Permission denied.', 'verlo' ) );
 		}
 		update_option( self::OPT_ACTIVE, 1, 'no' );
 		$url = self::current_stop_url();
@@ -52,7 +52,7 @@ class Verlo_Guided_Tour {
 
 	public static function handle_skip() {
 		if ( ! current_user_can( 'manage_options' ) || ! check_admin_referer( 'verlo_tour_skip' ) ) {
-			wp_die( 'Permission denied.' );
+			wp_die( esc_html__( 'Permission denied.', 'verlo' ) );
 		}
 		update_option( self::OPT_ACTIVE, 0, 'no' );
 		$referer = wp_get_referer();
@@ -73,43 +73,43 @@ class Verlo_Guided_Tour {
 			array(
 				'page'   => 'verlo-profile',
 				'target' => 'connect',
-				'title'  => 'Connect your Verlo license',
-				'body'   => 'Paste your license key below, or use the one-click "Connect with Verlo" button.',
+				'title'  => __( 'Connect your Verlo license', 'verlo' ),
+				'body'   => __( 'Paste your license key below, or use the one-click "Connect with Verlo" button.', 'verlo' ),
 				'done'   => $connected,
 			),
 			array(
 				'page'   => 'verlo-profile',
 				'target' => 'profile-analyze',
-				'title'  => 'Complete your Strategy Profile',
-				'body'   => 'Click "Analyze my site with Verlo" to auto-fill this from your existing content.',
+				'title'  => __( 'Complete your Strategy Profile', 'verlo' ),
+				'body'   => __( 'Click "Analyze my site with Verlo" to auto-fill this from your existing content.', 'verlo' ),
 				'done'   => Verlo_Profile::is_complete(),
 			),
 			array(
 				'page'   => 'verlo-map',
 				'target' => 'map-generate',
-				'title'  => 'Generate your topical map',
-				'body'   => 'Click "Generate map with Verlo" to plan your content pillars and articles.',
+				'title'  => __( 'Generate your topical map', 'verlo' ),
+				'body'   => __( 'Click "Generate map with Verlo" to plan your content pillars and articles.', 'verlo' ),
 				'done'   => ! empty( $map['pillars'] ),
 			),
 			array(
 				'page'   => 'verlo-map',
 				'target' => 'map-approve',
-				'title'  => 'Approve your topical map',
-				'body'   => 'Review the plan below, then click "Approve map" to unlock content generation.',
+				'title'  => __( 'Approve your topical map', 'verlo' ),
+				'body'   => __( 'Review the plan below, then click "Approve map" to unlock content generation.', 'verlo' ),
 				'done'   => Verlo_Topical_Map::is_approved(),
 			),
 			array(
 				'page'   => 'verlo-briefs',
 				'target' => 'brief-generate',
-				'title'  => 'Generate your first content brief',
-				'body'   => 'Click "Generate next brief" to outline your first planned article.',
+				'title'  => __( 'Generate your first content brief', 'verlo' ),
+				'body'   => __( 'Click "Generate next brief" to outline your first planned article.', 'verlo' ),
 				'done'   => class_exists( 'Verlo_Brief' ) && Verlo_Brief::count() > 0,
 			),
 			array(
 				'page'   => 'verlo-briefs',
 				'target' => 'article-generate',
-				'title'  => 'Generate your first article',
-				'body'   => 'Open the brief below, then click "Generate draft article".',
+				'title'  => __( 'Generate your first article', 'verlo' ),
+				'body'   => __( 'Open the brief below, then click "Generate draft article".', 'verlo' ),
 				'done'   => class_exists( 'Verlo_Article_Log' ) && Verlo_Article_Log::count() > 0,
 			),
 		);
@@ -187,10 +187,19 @@ class Verlo_Guided_Tour {
 		<div class="verlo-tour-strip">
 			<div class="verlo-tour-progress"><div class="verlo-tour-progress-bar" style="width:<?php echo (int) $pct; ?>%;"></div></div>
 			<div class="verlo-tour-strip-top">
-				<span class="verlo-tour-step-badge">Step <?php echo (int) ( $stop['index'] + 1 ); ?> of <?php echo (int) $total; ?></span>
+				<span class="verlo-tour-step-badge">
+					<?php
+					printf(
+						/* translators: 1: current step number, 2: total steps */
+						esc_html__( 'Step %1$d of %2$d', 'verlo' ),
+						(int) ( $stop['index'] + 1 ),
+						(int) $total
+					);
+					?>
+				</span>
 				<span class="verlo-tour-strip-title"><?php echo esc_html( $stop['title'] ); ?></span>
-				<a href="#verlo-tour-target" class="verlo-tour-jump">Take me there &darr;</a>
-				<a href="<?php echo esc_url( self::skip_url() ); ?>" class="verlo-tour-skip">Skip guided setup</a>
+				<a href="#verlo-tour-target" class="verlo-tour-jump"><?php esc_html_e( 'Take me there ↓', 'verlo' ); ?></a>
+				<a href="<?php echo esc_url( self::skip_url() ); ?>" class="verlo-tour-skip"><?php esc_html_e( 'Skip guided setup', 'verlo' ); ?></a>
 			</div>
 			<p class="verlo-tour-strip-desc"><?php echo esc_html( $stop['body'] ); ?></p>
 		</div>
@@ -255,10 +264,19 @@ class Verlo_Guided_Tour {
 		?>
 		<div class="verlo-tour-popup" id="verlo-tour-popup">
 			<div class="verlo-tour-popup-arrow"></div>
-			<span class="verlo-tour-step-badge">Step <?php echo (int) ( $stop['index'] + 1 ); ?> of <?php echo (int) $total; ?></span>
+			<span class="verlo-tour-step-badge">
+				<?php
+				printf(
+					/* translators: 1: current step number, 2: total steps */
+					esc_html__( 'Step %1$d of %2$d', 'verlo' ),
+					(int) ( $stop['index'] + 1 ),
+					(int) $total
+				);
+				?>
+			</span>
 			<p class="verlo-tour-title"><?php echo esc_html( $stop['title'] ); ?></p>
 			<p class="verlo-tour-desc"><?php echo esc_html( $stop['body'] ); ?></p>
-			<a href="<?php echo esc_url( self::skip_url() ); ?>" class="verlo-tour-skip">Skip guided setup</a>
+			<a href="<?php echo esc_url( self::skip_url() ); ?>" class="verlo-tour-skip"><?php esc_html_e( 'Skip guided setup', 'verlo' ); ?></a>
 		</div>
 		<script>
 		( function () {
@@ -293,8 +311,8 @@ class Verlo_Guided_Tour {
 	protected static function render_complete_banner() {
 		?>
 		<div class="verlo-tour-banner" style="background:linear-gradient(135deg,#0e6b45 0%,#189a62 100%);">
-			<p style="margin:0;font-size:15px;font-weight:700;">🎉 You're all set — your first article is generated.</p>
-			<p style="margin:4px 0 0;font-size:13px;color:rgba(255,255,255,.85);">From here, keep working through your topical map at your own pace — new briefs and articles work exactly the same way.</p>
+			<p style="margin:0;font-size:15px;font-weight:700;">🎉 <?php esc_html_e( "You're all set — your first article is generated.", 'verlo' ); ?></p>
+			<p style="margin:4px 0 0;font-size:13px;color:rgba(255,255,255,.85);"><?php esc_html_e( 'From here, keep working through your topical map at your own pace — new briefs and articles work exactly the same way.', 'verlo' ); ?></p>
 		</div>
 		<?php
 	}

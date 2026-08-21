@@ -80,7 +80,7 @@ class Verlo_Brief_Admin {
 	}
 
 	public static function menu() {
-		add_submenu_page( 'verlo', 'Content Briefs', 'Content Briefs', 'manage_options', 'verlo-briefs', array( __CLASS__, 'render' ) );
+		add_submenu_page( 'verlo', __( 'Content Briefs', 'verlo' ), __( 'Content Briefs', 'verlo' ), 'manage_options', 'verlo-briefs', array( __CLASS__, 'render' ) );
 	}
 
 	public static function render() {
@@ -90,17 +90,17 @@ class Verlo_Brief_Admin {
 		$link_billing = isset( $_GET['verlo_link_billing'] );
 		?>
 		<div class="wrap verlo-wrap">
-			<h1>Content Briefs
-				<a href="<?php echo esc_url( VERLO_DOCS_URL ); ?>" target="_blank" rel="noopener noreferrer" class="page-title-action">Help &amp; Docs</a>
+			<h1><?php esc_html_e( 'Content Briefs', 'verlo' ); ?>
+				<a href="<?php echo esc_url( VERLO_DOCS_URL ); ?>" target="_blank" rel="noopener noreferrer" class="page-title-action"><?php esc_html_e( 'Help & Docs', 'verlo' ); ?></a>
 			</h1>
-			<p style="margin-top:2px;color:#646970;">The spec for each planned article: title, angle, outline, internal links, and intent. Reviewed before anything is written.</p>
+			<p style="margin-top:2px;color:#646970;"><?php esc_html_e( 'The spec for each planned article: title, angle, outline, internal links, and intent. Reviewed before anything is written.', 'verlo' ); ?></p>
 			<?php if ( '__working__' === $notice ) : ?>
 				<?php Verlo_Async_Job::render_poll_bootstrap( 'brief-next', 'brief', admin_url( 'admin.php?page=verlo-briefs' ) ); ?>
 			<?php elseif ( $notice && '__generating__' !== $notice ) : ?>
 				<div class="notice <?php echo $is_error ? 'notice-error' : 'notice-success'; ?> is-dismissible"><p>
 					<?php echo esc_html( $notice ); ?>
 					<?php if ( $link_billing ) : ?>
-						&nbsp;<a href="<?php echo esc_url( Verlo_SaaS_Client::dashboard_url() . '/dashboard/billing' ); ?>" target="_blank" rel="noopener">Open billing →</a>
+						&nbsp;<a href="<?php echo esc_url( Verlo_SaaS_Client::dashboard_url() . '/dashboard/billing' ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'Open billing →', 'verlo' ); ?></a>
 					<?php endif; ?>
 				</p></div>
 			<?php endif; ?>
@@ -108,7 +108,13 @@ class Verlo_Brief_Admin {
 			<?php
 			if ( ! Verlo_Topical_Map::is_approved() ) {
 				$map_url = admin_url( 'admin.php?page=verlo-map' );
-				echo '<div class="verlo-card" style="margin-top:14px;"><h2>Topical Map not approved</h2><p class="verlo-sub">Briefs are generated from the approved map. <a href="' . esc_url( $map_url ) . '">Open the Topical Map →</a></p></div></div>';
+				echo '<div class="verlo-card" style="margin-top:14px;"><h2>' . esc_html__( 'Topical Map not approved', 'verlo' ) . '</h2><p class="verlo-sub">'
+					. sprintf(
+						/* translators: %s: link to the Topical Map page */
+						wp_kses_post( __( 'Briefs are generated from the approved map. %s', 'verlo' ) ),
+						'<a href="' . esc_url( $map_url ) . '">' . esc_html__( 'Open the Topical Map →', 'verlo' ) . '</a>'
+					)
+					. '</p></div></div>';
 				return;
 			}
 
@@ -130,22 +136,28 @@ class Verlo_Brief_Admin {
 		$connected = Verlo_Auth::is_connected();
 		?>
 		<div class="verlo-card" style="margin-top:14px;">
-			<h2>Overview</h2>
+			<h2><?php esc_html_e( 'Overview', 'verlo' ); ?></h2>
 			<p class="verlo-sub">
-				<?php echo (int) $stats['planned']; ?> planned articles ·
-				<?php echo (int) $stats['with_brief']; ?> briefed ·
-				<?php echo (int) $stats['without']; ?> awaiting a brief
+				<?php
+				printf(
+					/* translators: 1: planned article count, 2: briefed count, 3: awaiting-brief count */
+					esc_html__( '%1$d planned articles · %2$d briefed · %3$d awaiting a brief', 'verlo' ),
+					(int) $stats['planned'],
+					(int) $stats['with_brief'],
+					(int) $stats['without']
+				);
+				?>
 			</p>
 			<div class="verlo-actions">
 				<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline">
 					<input type="hidden" name="action" value="verlo_brief_generate_next" />
 					<?php wp_nonce_field( 'verlo_brief_generate_next' ); ?>
-					<button type="submit" class="button button-primary" data-verlo-tour-target="brief-generate"<?php echo Verlo_Guided_Tour::target_id_attr( 'brief-generate' ); ?> data-verlo-progress="Writing brief with Verlo…" data-verlo-phases="brief" <?php disabled( ! $next || ! $connected ); ?>>
-						<?php echo $next ? 'Generate next brief' : 'All planned articles briefed'; ?>
+					<button type="submit" class="button button-primary" data-verlo-tour-target="brief-generate"<?php echo Verlo_Guided_Tour::target_id_attr( 'brief-generate' ); ?> data-verlo-progress="<?php esc_attr_e( 'Writing brief with Verlo…', 'verlo' ); ?>" data-verlo-phases="brief" <?php disabled( ! $next || ! $connected ); ?>>
+						<?php echo $next ? esc_html__( 'Generate next brief', 'verlo' ) : esc_html__( 'All planned articles briefed', 'verlo' ); ?>
 					</button>
 				</form>
-				<?php if ( $next ) : ?><span class="description">Next: <strong><?php echo esc_html( $next['keyword'] ); ?></strong></span><?php endif; ?>
-				<?php if ( ! $connected ) : ?><span class="description">Connect your Verlo license first.</span><?php endif; ?>
+				<?php if ( $next ) : ?><span class="description"><?php printf( /* translators: %s: next planned keyword */ esc_html__( 'Next: %s', 'verlo' ), '<strong>' . esc_html( $next['keyword'] ) . '</strong>' ); ?></span><?php endif; ?>
+				<?php if ( ! $connected ) : ?><span class="description"><?php esc_html_e( 'Connect your Verlo license first.', 'verlo' ); ?></span><?php endif; ?>
 				<?php Verlo_Guided_Tour::render_target_callout( 'brief-generate' ); ?>
 			</div>
 		</div>
@@ -154,10 +166,18 @@ class Verlo_Brief_Admin {
 		$mismatches = Verlo_Strategist::audit_links();
 		if ( ! empty( $mismatches ) ) : ?>
 			<div class="verlo-card verlo-card-full" style="border-left:4px solid #d63638;">
-				<h2 style="color:#d63638;">⚠ <?php echo count( $mismatches ); ?> brief<?php echo 1 === count( $mismatches ) ? '' : 's'; ?> linked to the wrong post</h2>
-				<p class="verlo-sub">These rows show a keyword from the current map, but the linked post was actually generated for a different keyword, almost always leftover from a map regeneration before article IDs were made stable. Nothing was changed automatically; review each and use "Regenerate article" on the affected brief once you've decided what to do with the orphaned post below.</p>
+				<h2 style="color:#d63638;">⚠
+					<?php
+					printf(
+						/* translators: %d: number of mismatched briefs */
+						esc_html( _n( '%d brief linked to the wrong post', '%d briefs linked to the wrong post', count( $mismatches ), 'verlo' ) ),
+						count( $mismatches )
+					);
+					?>
+				</h2>
+				<p class="verlo-sub"><?php esc_html_e( 'These rows show a keyword from the current map, but the linked post was actually generated for a different keyword, almost always leftover from a map regeneration before article IDs were made stable. Nothing was changed automatically; review each and use "Regenerate article" on the affected brief once you\'ve decided what to do with the orphaned post below.', 'verlo' ); ?></p>
 				<table class="widefat striped">
-					<thead><tr><th>Row currently shows</th><th>Linked post was actually generated for</th><th>Linked post</th><th></th></tr></thead>
+					<thead><tr><th><?php esc_html_e( 'Row currently shows', 'verlo' ); ?></th><th><?php esc_html_e( 'Linked post was actually generated for', 'verlo' ); ?></th><th><?php esc_html_e( 'Linked post', 'verlo' ); ?></th><th></th></tr></thead>
 					<tbody>
 					<?php foreach ( $mismatches as $m ) : ?>
 						<tr>
@@ -165,8 +185,8 @@ class Verlo_Brief_Admin {
 							<td><?php echo esc_html( $m['generated_for_keyword'] ); ?></td>
 							<td><?php echo esc_html( $m['post_title'] ); ?></td>
 							<td>
-								<a class="button button-small" href="<?php echo esc_url( $m['edit_url'] ); ?>">Edit that post</a>
-								<a class="button button-small" href="<?php echo esc_url( admin_url( 'admin.php?page=verlo-briefs&verlo_brief=' . $m['article_id'] ) ); ?>">Open the brief</a>
+								<a class="button button-small" href="<?php echo esc_url( $m['edit_url'] ); ?>"><?php esc_html_e( 'Edit that post', 'verlo' ); ?></a>
+								<a class="button button-small" href="<?php echo esc_url( admin_url( 'admin.php?page=verlo-briefs&verlo_brief=' . $m['article_id'] ) ); ?>"><?php esc_html_e( 'Open the brief', 'verlo' ); ?></a>
 							</td>
 						</tr>
 					<?php endforeach; ?>
@@ -184,7 +204,7 @@ class Verlo_Brief_Admin {
 			<div class="verlo-card verlo-card-full">
 				<h2><?php echo esc_html( $pillar ); ?></h2>
 				<table class="widefat striped">
-					<thead><tr><th style="width:46%">Planned article</th><th>Intent</th><th>Status</th><th></th></tr></thead>
+					<thead><tr><th style="width:46%"><?php esc_html_e( 'Planned article', 'verlo' ); ?></th><th><?php esc_html_e( 'Intent', 'verlo' ); ?></th><th><?php esc_html_e( 'Status', 'verlo' ); ?></th><th></th></tr></thead>
 					<tbody>
 					<?php foreach ( $articles as $a ) : ?>
 						<tr>
@@ -193,16 +213,16 @@ class Verlo_Brief_Admin {
 							<td><?php $st = Verlo_Strategist::pipeline_status( $a['id'] ); ?><span class="verlo-badge <?php echo esc_attr( $st['badge'] ); ?>"><?php echo esc_html( $st['label'] ); ?></span></td>
 							<td>
 								<?php if ( $a['has_brief'] ) : ?>
-									<a class="button button-small" href="<?php echo esc_url( admin_url( 'admin.php?page=verlo-briefs&verlo_brief=' . $a['id'] ) ); ?>">Open</a>
+									<a class="button button-small" href="<?php echo esc_url( admin_url( 'admin.php?page=verlo-briefs&verlo_brief=' . $a['id'] ) ); ?>"><?php esc_html_e( 'Open', 'verlo' ); ?></a>
 									<?php if ( ! empty( $st['post_id'] ) ) : ?>
-										<a class="button button-small button-primary" href="<?php echo esc_url( get_edit_post_link( $st['post_id'] ) ); ?>"><?php echo 'published' === $st['state'] ? 'Edit post' : 'Edit draft'; ?> →</a>
+										<a class="button button-small button-primary" href="<?php echo esc_url( get_edit_post_link( $st['post_id'] ) ); ?>"><?php echo 'published' === $st['state'] ? esc_html__( 'Edit post →', 'verlo' ) : esc_html__( 'Edit draft →', 'verlo' ); ?></a>
 									<?php endif; ?>
 								<?php else : ?>
 									<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline">
 										<input type="hidden" name="action" value="verlo_brief_generate" />
 										<input type="hidden" name="article_id" value="<?php echo (int) $a['id']; ?>" />
 										<?php wp_nonce_field( 'verlo_brief_generate' ); ?>
-										<button type="submit" class="button button-small button-primary" data-verlo-progress="Writing brief with Verlo…" data-verlo-phases="brief" <?php disabled( ! $connected ); ?>>Generate brief</button>
+										<button type="submit" class="button button-small button-primary" data-verlo-progress="<?php esc_attr_e( 'Writing brief with Verlo…', 'verlo' ); ?>" data-verlo-phases="brief" <?php disabled( ! $connected ); ?>><?php esc_html_e( 'Generate brief', 'verlo' ); ?></button>
 									</form>
 								<?php endif; ?>
 							</td>
@@ -234,26 +254,37 @@ class Verlo_Brief_Admin {
 		$diff_version = isset( $_GET['verlo_diff_version'] ) ? (int) $_GET['verlo_diff_version'] : 0;
 
 		$labels = array(
-			'published' => array( 'Published', '#1a7f37', '#dafbe1' ),
-			'draft'     => array( 'Draft', '#9a6700', '#fff8c5' ),
-			'pending'   => array( 'Pending', '#9a6700', '#fff8c5' ),
-			'future'    => array( 'Scheduled', '#0969da', '#ddf4ff' ),
-			'private'   => array( 'Private', '#57606a', '#eaeef2' ),
-			'trashed'   => array( 'Trashed', '#cf222e', '#ffebe9' ),
-			'deleted'   => array( 'Deleted', '#82071e', '#ffd7d5' ),
-			'other'     => array( 'Other', '#57606a', '#eaeef2' ),
+			'published' => array( __( 'Published', 'verlo' ), '#1a7f37', '#dafbe1' ),
+			'draft'     => array( __( 'Draft', 'verlo' ), '#9a6700', '#fff8c5' ),
+			'pending'   => array( __( 'Pending', 'verlo' ), '#9a6700', '#fff8c5' ),
+			'future'    => array( __( 'Scheduled', 'verlo' ), '#0969da', '#ddf4ff' ),
+			'private'   => array( __( 'Private', 'verlo' ), '#57606a', '#eaeef2' ),
+			'trashed'   => array( __( 'Trashed', 'verlo' ), '#cf222e', '#ffebe9' ),
+			'deleted'   => array( __( 'Deleted', 'verlo' ), '#82071e', '#ffd7d5' ),
+			'other'     => array( __( 'Other', 'verlo' ), '#57606a', '#eaeef2' ),
 		);
 		?>
 		<div class="verlo-card verlo-card-full" style="margin-top:18px;">
-			<h2>Generated articles <span style="font-weight:400;color:#646970;font-size:13px;">· <?php echo (int) count( $rows ); ?> on record</span></h2>
-			<p class="verlo-sub" style="margin-top:-4px;">Every article Verlo has written on this site. This list is preserved even if you rebuild the topical map, so completed work is never lost. Status is read live from WordPress.</p>
+			<h2>
+				<?php esc_html_e( 'Generated articles', 'verlo' ); ?>
+				<span style="font-weight:400;color:#646970;font-size:13px;">·
+					<?php
+					printf(
+						/* translators: %d: number of generated articles */
+						esc_html( _n( '%d on record', '%d on record', count( $rows ), 'verlo' ) ),
+						(int) count( $rows )
+					);
+					?>
+				</span>
+			</h2>
+			<p class="verlo-sub" style="margin-top:-4px;"><?php esc_html_e( 'Every article Verlo has written on this site. This list is preserved even if you rebuild the topical map, so completed work is never lost. Status is read live from WordPress.', 'verlo' ); ?></p>
 			<table class="widefat striped">
 				<thead><tr>
-					<th style="width:34%">Article</th>
-					<th>Pillar</th>
-					<th>Generated</th>
-					<th>Time</th>
-					<th>Status</th>
+					<th style="width:34%"><?php esc_html_e( 'Article', 'verlo' ); ?></th>
+					<th><?php esc_html_e( 'Pillar', 'verlo' ); ?></th>
+					<th><?php esc_html_e( 'Generated', 'verlo' ); ?></th>
+					<th><?php esc_html_e( 'Time', 'verlo' ); ?></th>
+					<th><?php esc_html_e( 'Status', 'verlo' ); ?></th>
 					<th></th>
 				</tr></thead>
 				<tbody>
@@ -277,7 +308,15 @@ class Verlo_Brief_Admin {
 							<?php endif; ?>
 							<?php if ( $vcount > 1 ) : ?>
 								<br><details style="margin-top:4px;"<?php echo ( $diff_post === (int) $r['post_id'] ) ? ' open' : ''; ?>>
-									<summary style="cursor:pointer;color:#646970;font-size:12px;">Regenerated <?php echo (int) ( $vcount - 1 ); ?>&times; &mdash; view history</summary>
+									<summary style="cursor:pointer;color:#646970;font-size:12px;">
+										<?php
+										printf(
+											/* translators: %d: number of times regenerated */
+											esc_html( _n( 'Regenerated %d× — view history', 'Regenerated %d× — view history', $vcount - 1, 'verlo' ) ),
+											(int) ( $vcount - 1 )
+										);
+										?>
+									</summary>
 									<ul style="margin:6px 0 0 0;padding-left:16px;font-size:12px;color:#646970;">
 										<?php foreach ( $prior as $v ) :
 											$vtitle       = '' !== $v['title'] ? $v['title'] : $v['keyword'];
@@ -295,22 +334,38 @@ class Verlo_Brief_Admin {
 											<li style="margin-bottom:4px;">
 												v<?php echo (int) $v['version']; ?> &middot;
 												<?php echo esc_html( $vtitle ); ?> &middot;
-												<span title="<?php echo esc_attr( wp_date( 'M j, Y H:i', (int) $v['generated_at'] ) ); ?>"><?php echo esc_html( human_time_diff( (int) $v['generated_at'], time() ) ); ?> ago</span>
+												<span title="<?php echo esc_attr( wp_date( 'M j, Y H:i', (int) $v['generated_at'] ) ); ?>">
+													<?php
+													printf(
+														/* translators: %s: human-readable elapsed time */
+														esc_html__( '%s ago', 'verlo' ),
+														esc_html( human_time_diff( (int) $v['generated_at'], time() ) )
+													);
+													?>
+												</span>
 												<?php if ( ! empty( $v['restored_from'] ) ) : ?>
-													<span style="color:#0969da;">&middot; restored from v<?php echo (int) $v['restored_from']; ?></span>
+													<span style="color:#0969da;">&middot;
+														<?php
+														printf(
+															/* translators: %d: version number restored from */
+															esc_html__( 'restored from v%d', 'verlo' ),
+															(int) $v['restored_from']
+														);
+														?>
+													</span>
 												<?php endif; ?>
 												<?php if ( $has_content ) : ?>
-													&middot; <a href="<?php echo esc_url( $diff_url ); ?>"><?php echo $is_shown ? 'Hide diff' : 'View diff'; ?></a>
+													&middot; <a href="<?php echo esc_url( $diff_url ); ?>"><?php echo $is_shown ? esc_html__( 'Hide diff', 'verlo' ) : esc_html__( 'View diff', 'verlo' ); ?></a>
 													&middot;
-													<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline;" onsubmit="return confirm('Restore version <?php echo (int) $v['version']; ?>? This replaces the current live draft content — the content that\'s live right now stays in the history too, one version back, so nothing is lost.');">
+													<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline;" onsubmit="return confirm('<?php echo esc_js( sprintf( /* translators: %d: version number */ __( 'Restore version %d? This replaces the current live draft content — the content that\'s live right now stays in the history too, one version back, so nothing is lost.', 'verlo' ), (int) $v['version'] ) ); ?>');">
 														<input type="hidden" name="action" value="verlo_restore_version" />
 														<input type="hidden" name="post_id" value="<?php echo (int) $r['post_id']; ?>" />
 														<input type="hidden" name="version" value="<?php echo (int) $v['version']; ?>" />
 														<?php wp_nonce_field( 'verlo_restore_version' ); ?>
-														<button type="submit" class="button-link" style="color:#cf222e;font-size:12px;">Restore</button>
+														<button type="submit" class="button-link" style="color:#cf222e;font-size:12px;"><?php esc_html_e( 'Restore', 'verlo' ); ?></button>
 													</form>
 												<?php else : ?>
-													<span style="color:#999;">&middot; no saved content to diff/restore</span>
+													<span style="color:#999;">&middot; <?php esc_html_e( 'no saved content to diff/restore', 'verlo' ); ?></span>
 												<?php endif; ?>
 											</li>
 										<?php endforeach; ?>
@@ -319,15 +374,23 @@ class Verlo_Brief_Admin {
 							<?php endif; ?>
 						</td>
 						<td><?php echo $r['pillar'] ? esc_html( $r['pillar'] ) : '<span style="color:#999;">—</span>'; ?></td>
-						<td><span title="<?php echo esc_attr( wp_date( 'M j, Y H:i', (int) $r['updated_at'] ) ); ?>"><?php echo esc_html( human_time_diff( (int) $r['updated_at'], time() ) ); ?> ago</span></td>
+						<td><span title="<?php echo esc_attr( wp_date( 'M j, Y H:i', (int) $r['updated_at'] ) ); ?>">
+							<?php
+							printf(
+								/* translators: %s: human-readable elapsed time */
+								esc_html__( '%s ago', 'verlo' ),
+								esc_html( human_time_diff( (int) $r['updated_at'], time() ) )
+							);
+							?>
+						</span></td>
 						<td><?php echo esc_html( $time_h ); ?></td>
 						<td><span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;color:<?php echo esc_attr( $meta[1] ); ?>;background:<?php echo esc_attr( $meta[2] ); ?>;"><?php echo esc_html( $meta[0] ); ?></span></td>
 						<td style="white-space:nowrap;">
 							<?php if ( ! empty( $r['edit_url'] ) ) : ?>
-								<a class="button button-small" href="<?php echo esc_url( $r['edit_url'] ); ?>">Edit</a>
+								<a class="button button-small" href="<?php echo esc_url( $r['edit_url'] ); ?>"><?php esc_html_e( 'Edit', 'verlo' ); ?></a>
 							<?php endif; ?>
 							<?php if ( ! empty( $r['view_url'] ) ) : ?>
-								<a class="button button-small" href="<?php echo esc_url( $r['view_url'] ); ?>" target="_blank" rel="noopener">View ↗</a>
+								<a class="button button-small" href="<?php echo esc_url( $r['view_url'] ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'View ↗', 'verlo' ); ?></a>
 							<?php endif; ?>
 						</td>
 					</tr>
@@ -357,25 +420,26 @@ class Verlo_Brief_Admin {
 	protected static function render_version_diff( $post_id, $version ) {
 		$old_content = Verlo_Article_Log::get_version_content( $post_id, $version );
 		if ( null === $old_content ) {
-			echo '<p style="color:#999;margin:0;">That version&#8217;s content is no longer available to diff.</p>';
+			echo '<p style="color:#999;margin:0;">' . esc_html__( "That version's content is no longer available to diff.", 'verlo' ) . '</p>';
 			return;
 		}
 		$post = get_post( $post_id );
 		if ( ! $post ) {
-			echo '<p style="color:#999;margin:0;">This article no longer exists.</p>';
+			echo '<p style="color:#999;margin:0;">' . esc_html__( 'This article no longer exists.', 'verlo' ) . '</p>';
 			return;
 		}
 
 		require_once ABSPATH . WPINC . '/wp-diff.php';
 		$diff = wp_text_diff( $old_content, $post->post_content, array(
 			'title'       => '',
-			'title_left'  => 'Version ' . (int) $version,
-			'title_right' => 'Current (live)',
+			'title_left'  => sprintf( /* translators: %d: version number */ __( 'Version %d', 'verlo' ), (int) $version ),
+			'title_right' => __( 'Current (live)', 'verlo' ),
 		) );
 
 		if ( ! $diff ) {
 			printf(
-				'<p style="color:#646970;margin:0;">Version %d is identical to the current live content — no changes.</p>',
+				/* translators: %d: version number */
+				'<p style="color:#646970;margin:0;">' . esc_html__( 'Version %d is identical to the current live content — no changes.', 'verlo' ) . '</p>',
 				(int) $version
 			);
 			return;
@@ -406,17 +470,32 @@ class Verlo_Brief_Admin {
 		$connected = Verlo_Auth::is_connected();
 		?>
 		<p style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-			<a href="<?php echo esc_url( $back ); ?>">← All briefs</a>
+			<a href="<?php echo esc_url( $back ); ?>">← <?php esc_html_e( 'All briefs', 'verlo' ); ?></a>
 			<?php if ( $next ) : ?>
 				<span style="display:inline-flex;align-items:center;gap:10px;">
-					<span class="description" style="margin:0;">Next up: <strong><?php echo esc_html( $next['keyword'] ); ?></strong></span>
-					<button type="submit" form="verlo-brief-form" name="then" value="next" class="button" data-verlo-progress="Saving, then writing the next brief…" data-verlo-phases="brief">Save &amp; next →</button>
+					<span class="description" style="margin:0;"><?php printf( /* translators: %s: next planned keyword */ esc_html__( 'Next up: %s', 'verlo' ), '<strong>' . esc_html( $next['keyword'] ) . '</strong>' ); ?></span>
+					<button type="submit" form="verlo-brief-form" name="then" value="next" class="button" data-verlo-progress="<?php esc_attr_e( 'Saving, then writing the next brief…', 'verlo' ); ?>" data-verlo-phases="brief"><?php esc_html_e( 'Save & next →', 'verlo' ); ?></button>
 				</span>
 			<?php endif; ?>
 		</p>
 		<div class="verlo-card verlo-card-full">
-			<h2>Brief: <?php echo esc_html( $b['keyword'] ); ?> <span class="verlo-badge ok"><?php echo esc_html( $b['intent'] ); ?></span></h2>
-			<p class="verlo-sub">Pillar: <?php echo esc_html( $b['pillar'] ); ?><?php echo ! empty( $b['meta']['generated_at'] ) ? ' · generated ' . esc_html( human_time_diff( (int) $b['meta']['generated_at'], time() ) ) . ' ago' : ''; ?></p>
+			<h2>
+				<?php printf( /* translators: %s: target keyword */ esc_html__( 'Brief: %s', 'verlo' ), esc_html( $b['keyword'] ) ); ?>
+				<span class="verlo-badge ok"><?php echo esc_html( $b['intent'] ); ?></span>
+			</h2>
+			<p class="verlo-sub">
+				<?php
+				printf( /* translators: %s: pillar name */ esc_html__( 'Pillar: %s', 'verlo' ), esc_html( $b['pillar'] ) );
+				if ( ! empty( $b['meta']['generated_at'] ) ) {
+					echo ' · ';
+					printf(
+						/* translators: %s: human-readable time since generated */
+						esc_html__( 'generated %s ago', 'verlo' ),
+						esc_html( human_time_diff( (int) $b['meta']['generated_at'], time() ) )
+					);
+				}
+				?>
+			</p>
 
 			<?php
 			$draft_post = null;
@@ -449,21 +528,21 @@ class Verlo_Brief_Admin {
 					<div class="verlo-gen-live-inner">
 						<span class="verlo-spinner" aria-hidden="true"></span>
 						<div>
-							<div class="verlo-gen-title">Writing your article…</div>
-							<div class="verlo-gen-msg" id="verlo-gen-msg">Starting up…</div>
+							<div class="verlo-gen-title"><?php esc_html_e( 'Writing your article…', 'verlo' ); ?></div>
+							<div class="verlo-gen-msg" id="verlo-gen-msg"><?php esc_html_e( 'Starting up…', 'verlo' ); ?></div>
 						</div>
 					</div>
-					<div class="verlo-gen-note">This runs in the background and can take a minute or two. You can safely stay on this page. It will update automatically when the draft is ready. No need to refresh, and please don't click generate again.</div>
+					<div class="verlo-gen-note"><?php esc_html_e( "This runs in the background and can take a minute or two. You can safely stay on this page. It will update automatically when the draft is ready. No need to refresh, and please don't click generate again.", 'verlo' ); ?></div>
 				</div>
 			<?php elseif ( 'error' === $gen['state'] && ! $draft_post ) : ?>
-				<div class="notice notice-error inline" style="margin:8px 0 16px;"><p><strong>Generation failed:</strong> <?php echo esc_html( $gen['message'] ); ?></p></div>
+				<div class="notice notice-error inline" style="margin:8px 0 16px;"><p><strong><?php esc_html_e( 'Generation failed:', 'verlo' ); ?></strong> <?php echo esc_html( $gen['message'] ); ?></p></div>
 			<?php endif; ?>
 			<?php if ( $draft_post ) : ?>
 				<?php $is_pub = ( 'publish' === $draft_post->post_status ); ?>
 				<div style="margin:8px 0 16px;padding:18px 20px;border:1px solid <?php echo $is_pub ? '#bfe3cf' : '#f4cf9b'; ?>;border-radius:10px;background:<?php echo $is_pub ? 'linear-gradient(180deg,#f1fbf5,#fff)' : 'linear-gradient(180deg,#fff8ee,#fff)'; ?>;">
 					<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
 						<div>
-							<div style="font-size:13px;font-weight:600;color:#646970;text-transform:uppercase;letter-spacing:.03em;">Article</div>
+							<div style="font-size:13px;font-weight:600;color:#646970;text-transform:uppercase;letter-spacing:.03em;"><?php esc_html_e( 'Article', 'verlo' ); ?></div>
 							<div style="margin-top:4px;"><span class="verlo-badge <?php echo esc_attr( $st['badge'] ); ?>" style="font-size:13px;padding:4px 12px;"><?php echo esc_html( $st['label'] ); ?></span>
 							<?php
 							$gen_secs = isset( $b['draft']['gen_seconds'] ) ? (float) $b['draft']['gen_seconds'] : 0;
@@ -471,42 +550,54 @@ class Verlo_Brief_Admin {
 								$mins = floor( $gen_secs / 60 );
 								$secs = (int) round( $gen_secs - $mins * 60 );
 								$human = $mins > 0 ? ( $mins . 'm ' . $secs . 's' ) : ( $secs . 's' );
-								echo '<span style="margin-left:8px;color:#646970;font-size:12px;" title="Actual server-side generation time">generated in ' . esc_html( $human ) . '</span>';
+								printf(
+									/* translators: %s: human-readable generation duration */
+									'<span style="margin-left:8px;color:#646970;font-size:12px;" title="' . esc_attr__( 'Actual server-side generation time', 'verlo' ) . '">' . esc_html__( 'generated in %s', 'verlo' ) . '</span>',
+									esc_html( $human )
+								);
 							}
 							?>
 							</div>
 						</div>
 						<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-							<a class="button button-primary button-hero" href="<?php echo esc_url( get_edit_post_link( $draft_post->ID ) ); ?>">✎ Edit article in WordPress</a>
-							<a class="button button-hero" href="<?php echo esc_url( $is_pub ? get_permalink( $draft_post->ID ) : get_preview_post_link( $draft_post ) ); ?>" target="_blank" rel="noopener"><?php echo $is_pub ? 'View live ↗' : 'Preview ↗'; ?></a>
+							<a class="button button-primary button-hero" href="<?php echo esc_url( get_edit_post_link( $draft_post->ID ) ); ?>"><?php esc_html_e( '✎ Edit article in WordPress', 'verlo' ); ?></a>
+							<a class="button button-hero" href="<?php echo esc_url( $is_pub ? get_permalink( $draft_post->ID ) : get_preview_post_link( $draft_post ) ); ?>" target="_blank" rel="noopener"><?php echo $is_pub ? esc_html__( 'View live ↗', 'verlo' ) : esc_html__( 'Preview ↗', 'verlo' ); ?></a>
 						</div>
 					</div>
 					<div class="verlo-actions" style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(0,0,0,.06);">
-						<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline" data-verlo-confirm-unsaved="1" onsubmit="return confirm('Regenerate the article? It will replace the current draft content — the current version stays in the history below and can be restored any time.');">
+						<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline" data-verlo-confirm-unsaved="1" onsubmit="return confirm('<?php echo esc_js( __( 'Regenerate the article? It will replace the current draft content — the current version stays in the history below and can be restored any time.', 'verlo' ) ); ?>');">
 							<input type="hidden" name="action" value="verlo_brief_generate_article" />
 							<input type="hidden" name="article_id" value="<?php echo (int) $aid; ?>" />
 							<?php wp_nonce_field( 'verlo_brief_generate_article' ); ?>
-							<button type="submit" class="button" <?php disabled( $generating || ! $connected ); ?> data-verlo-async="1">Regenerate article</button>
+							<button type="submit" class="button" <?php disabled( $generating || ! $connected ); ?> data-verlo-async="1"><?php esc_html_e( 'Regenerate article', 'verlo' ); ?></button>
 						</form>
 						<span class="description">
-							<?php echo ! $connected ? 'Connect your Verlo license first.' : 'Nothing is published automatically. Edit and publish the draft in WordPress when you are happy with it.'; ?>
+							<?php echo ! $connected ? esc_html__( 'Connect your Verlo license first.', 'verlo' ) : esc_html__( 'Nothing is published automatically. Edit and publish the draft in WordPress when you are happy with it.', 'verlo' ); ?>
 						</span>
 					</div>
 				</div>
 			<?php elseif ( ! $generating && ! $just_started ) : ?>
 				<div style="margin:8px 0 16px;padding:18px 20px;border:1px solid #c3d9ec;border-radius:10px;background:linear-gradient(180deg,#f3f9ff,#fff);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
 					<div>
-						<div style="font-size:15px;font-weight:600;color:#1d2327;">Ready to write the article</div>
-						<div class="description" style="margin-top:2px;">Generates a full draft from this brief into the “<?php echo esc_html( $b['pillar'] ); ?>” category. Saved as a draft for your review. Never auto-published.</div>
+						<div style="font-size:15px;font-weight:600;color:#1d2327;"><?php esc_html_e( 'Ready to write the article', 'verlo' ); ?></div>
+						<div class="description" style="margin-top:2px;">
+							<?php
+							printf(
+								/* translators: %s: pillar/category name */
+								esc_html__( 'Generates a full draft from this brief into the "%s" category. Saved as a draft for your review. Never auto-published.', 'verlo' ),
+								esc_html( $b['pillar'] )
+							);
+							?>
+						</div>
 					</div>
 					<form method="post" action="<?php echo esc_url( $url ); ?>" style="margin:0;" data-verlo-confirm-unsaved="1">
 						<input type="hidden" name="action" value="verlo_brief_generate_article" />
 						<input type="hidden" name="article_id" value="<?php echo (int) $aid; ?>" />
 						<?php wp_nonce_field( 'verlo_brief_generate_article' ); ?>
-						<button type="submit" class="button button-primary button-hero" data-verlo-tour-target="article-generate"<?php echo Verlo_Guided_Tour::target_id_attr( 'article-generate' ); ?> <?php disabled( ! $connected ); ?> data-verlo-async="1">✍ Generate draft article</button>
+						<button type="submit" class="button button-primary button-hero" data-verlo-tour-target="article-generate"<?php echo Verlo_Guided_Tour::target_id_attr( 'article-generate' ); ?> <?php disabled( ! $connected ); ?> data-verlo-async="1"><?php esc_html_e( '✍ Generate draft article', 'verlo' ); ?></button>
 					</form>
 					<?php Verlo_Guided_Tour::render_target_callout( 'article-generate' ); ?>
-					<?php if ( ! $connected ) : ?><span class="description">Connect your Verlo license first.</span><?php endif; ?>
+					<?php if ( ! $connected ) : ?><span class="description"><?php esc_html_e( 'Connect your Verlo license first.', 'verlo' ); ?></span><?php endif; ?>
 				</div>
 			<?php endif; ?>
 
@@ -515,22 +606,22 @@ class Verlo_Brief_Admin {
 				<input type="hidden" name="article_id" value="<?php echo (int) $aid; ?>" />
 				<?php wp_nonce_field( 'verlo_brief_save' ); ?>
 				<table class="form-table" role="presentation">
-					<tr class="verlo-field"><th>Suggested title</th><td><input type="text" name="suggested_title" value="<?php echo esc_attr( $b['suggested_title'] ); ?>" /></td></tr>
-					<tr class="verlo-field"><th>Angle</th><td><textarea name="angle" rows="2"><?php echo esc_textarea( $b['angle'] ); ?></textarea></td></tr>
-					<tr class="verlo-field"><th>Search intent</th><td><textarea name="search_intent" rows="2"><?php echo esc_textarea( $b['search_intent'] ); ?></textarea></td></tr>
-					<tr class="verlo-field"><th>Audience note</th><td><textarea name="audience_note" rows="2"><?php echo esc_textarea( $b['audience_note'] ); ?></textarea></td></tr>
-					<tr class="verlo-field"><th>Outline (one H2 per line)</th><td><textarea name="outline" rows="6"><?php echo esc_textarea( implode( "\n", $b['outline'] ) ); ?></textarea></td></tr>
-					<tr class="verlo-field"><th>Internal links (url | anchor)</th><td>
+					<tr class="verlo-field"><th><?php esc_html_e( 'Suggested title', 'verlo' ); ?></th><td><input type="text" name="suggested_title" value="<?php echo esc_attr( $b['suggested_title'] ); ?>" /></td></tr>
+					<tr class="verlo-field"><th><?php esc_html_e( 'Angle', 'verlo' ); ?></th><td><textarea name="angle" rows="2"><?php echo esc_textarea( $b['angle'] ); ?></textarea></td></tr>
+					<tr class="verlo-field"><th><?php esc_html_e( 'Search intent', 'verlo' ); ?></th><td><textarea name="search_intent" rows="2"><?php echo esc_textarea( $b['search_intent'] ); ?></textarea></td></tr>
+					<tr class="verlo-field"><th><?php esc_html_e( 'Audience note', 'verlo' ); ?></th><td><textarea name="audience_note" rows="2"><?php echo esc_textarea( $b['audience_note'] ); ?></textarea></td></tr>
+					<tr class="verlo-field"><th><?php esc_html_e( 'Outline (one H2 per line)', 'verlo' ); ?></th><td><textarea name="outline" rows="6"><?php echo esc_textarea( implode( "\n", $b['outline'] ) ); ?></textarea></td></tr>
+					<tr class="verlo-field"><th><?php esc_html_e( 'Internal links (url | anchor)', 'verlo' ); ?></th><td>
 						<textarea name="internal_links" rows="4"><?php
 							$lines = array();
 							foreach ( $b['internal_links'] as $l ) { $lines[] = $l['url'] . ' | ' . $l['anchor']; }
 							echo esc_textarea( implode( "\n", $lines ) );
 						?></textarea>
-						<p class="description">Only URLs from your own site are kept.</p>
+						<p class="description"><?php esc_html_e( 'Only URLs from your own site are kept.', 'verlo' ); ?></p>
 					</td></tr>
-					<tr class="verlo-field"><th>External source ideas (one per line)</th><td><textarea name="external_ideas" rows="3"><?php echo esc_textarea( implode( "\n", $b['external_ideas'] ) ); ?></textarea></td></tr>
-					<tr class="verlo-field"><th>FAQ questions (one per line)</th><td><textarea name="faq" rows="4"><?php echo esc_textarea( implode( "\n", $b['faq'] ) ); ?></textarea></td></tr>
-					<tr class="verlo-field"><th>Target length</th><td>
+					<tr class="verlo-field"><th><?php esc_html_e( 'External source ideas (one per line)', 'verlo' ); ?></th><td><textarea name="external_ideas" rows="3"><?php echo esc_textarea( implode( "\n", $b['external_ideas'] ) ); ?></textarea></td></tr>
+					<tr class="verlo-field"><th><?php esc_html_e( 'FAQ questions (one per line)', 'verlo' ); ?></th><td><textarea name="faq" rows="4"><?php echo esc_textarea( implode( "\n", $b['faq'] ) ); ?></textarea></td></tr>
+					<tr class="verlo-field"><th><?php esc_html_e( 'Target length', 'verlo' ); ?></th><td>
 						<?php
 						// Values are the band midpoints the SaaS classifier uses (see
 						// verlo-saas's classifyWordCount), not the band edges — sending
@@ -539,36 +630,36 @@ class Verlo_Brief_Admin {
 						$verlo_wc_band = ( (int) $b['word_count'] < 1050 ) ? 750 : ( ( (int) $b['word_count'] < 1750 ) ? 1350 : 2250 );
 						?>
 						<select name="word_count" style="max-width:240px;">
-							<option value="750" <?php selected( $verlo_wc_band, 750 ); ?>>Small (600-900 words)</option>
-							<option value="1350" <?php selected( $verlo_wc_band, 1350 ); ?>>Medium (1200-1500 words)</option>
-							<option value="2250" <?php selected( $verlo_wc_band, 2250 ); ?>>Long (2000-2500 words)</option>
+							<option value="750" <?php selected( $verlo_wc_band, 750 ); ?>><?php esc_html_e( 'Small (600-900 words)', 'verlo' ); ?></option>
+							<option value="1350" <?php selected( $verlo_wc_band, 1350 ); ?>><?php esc_html_e( 'Medium (1200-1500 words)', 'verlo' ); ?></option>
+							<option value="2250" <?php selected( $verlo_wc_band, 2250 ); ?>><?php esc_html_e( 'Long (2000-2500 words)', 'verlo' ); ?></option>
 						</select>
 					</td></tr>
-					<tr class="verlo-field"><th>Voice note</th><td><textarea name="voice_note" rows="2"><?php echo esc_textarea( $b['voice_note'] ); ?></textarea></td></tr>
+					<tr class="verlo-field"><th><?php esc_html_e( 'Voice note', 'verlo' ); ?></th><td><textarea name="voice_note" rows="2"><?php echo esc_textarea( $b['voice_note'] ); ?></textarea></td></tr>
 				</table>
 				<div class="verlo-actions">
-					<?php submit_button( 'Save brief', 'primary', 'submit', false ); ?>
+					<?php submit_button( __( 'Save brief', 'verlo' ), 'primary', 'submit', false ); ?>
 					<?php if ( $next ) : ?>
-						<button type="submit" name="then" value="next" class="button" data-verlo-progress="Saving, then writing the next brief…" data-verlo-phases="brief">Save &amp; next →</button>
-						<span class="description">Saves this brief, then opens a fresh brief for <strong><?php echo esc_html( $next['keyword'] ); ?></strong>.</span>
+						<button type="submit" name="then" value="next" class="button" data-verlo-progress="<?php esc_attr_e( 'Saving, then writing the next brief…', 'verlo' ); ?>" data-verlo-phases="brief"><?php esc_html_e( 'Save & next →', 'verlo' ); ?></button>
+						<span class="description"><?php printf( /* translators: %s: next planned keyword */ esc_html__( 'Saves this brief, then opens a fresh brief for %s.', 'verlo' ), '<strong>' . esc_html( $next['keyword'] ) . '</strong>' ); ?></span>
 					<?php endif; ?>
 				</div>
 			</form>
 
 			<hr />
 			<div class="verlo-actions">
-				<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline" onsubmit="return confirm('Regenerate this brief with Verlo? Your edits will be replaced.');">
+				<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline" onsubmit="return confirm('<?php echo esc_js( __( 'Regenerate this brief with Verlo? Your edits will be replaced.', 'verlo' ) ); ?>');">
 					<input type="hidden" name="action" value="verlo_brief_generate" />
 					<input type="hidden" name="article_id" value="<?php echo (int) $aid; ?>" />
 					<?php wp_nonce_field( 'verlo_brief_generate' ); ?>
-					<button type="submit" class="button" <?php disabled( ! $connected ); ?> data-verlo-progress="Rewriting brief with Verlo…" data-verlo-phases="brief">Regenerate with Verlo</button>
+					<button type="submit" class="button" <?php disabled( ! $connected ); ?> data-verlo-progress="<?php esc_attr_e( 'Rewriting brief with Verlo…', 'verlo' ); ?>" data-verlo-phases="brief"><?php esc_html_e( 'Regenerate with Verlo', 'verlo' ); ?></button>
 				</form>
-				<?php if ( ! $connected ) : ?><span class="description">Connect your Verlo license first.</span><?php endif; ?>
-				<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline" onsubmit="return confirm('Delete this brief?');">
+				<?php if ( ! $connected ) : ?><span class="description"><?php esc_html_e( 'Connect your Verlo license first.', 'verlo' ); ?></span><?php endif; ?>
+				<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline" onsubmit="return confirm('<?php echo esc_js( __( 'Delete this brief?', 'verlo' ) ); ?>');">
 					<input type="hidden" name="action" value="verlo_brief_delete" />
 					<input type="hidden" name="article_id" value="<?php echo (int) $aid; ?>" />
 					<?php wp_nonce_field( 'verlo_brief_delete' ); ?>
-					<button type="submit" class="button-link" style="color:#b32d2e;">Delete brief</button>
+					<button type="submit" class="button-link" style="color:#b32d2e;"><?php esc_html_e( 'Delete brief', 'verlo' ); ?></button>
 				</form>
 			</div>
 		</div>
@@ -593,22 +684,38 @@ class Verlo_Brief_Admin {
 			var nonce = box.getAttribute('data-nonce');
 			var ajax  = box.getAttribute('data-ajax');
 
+			var I18N = <?php
+				echo wp_json_encode( array(
+					/* translators: strings shown in the article-generation progress box */
+					'phases' => array(
+						__( 'Reading your content brief…', 'verlo' ),
+						__( 'Studying the outline and search intent…', 'verlo' ),
+						__( 'Drafting the introduction…', 'verlo' ),
+						__( 'Writing the main sections…', 'verlo' ),
+						__( 'Weaving in your internal links…', 'verlo' ),
+						__( 'Composing the FAQ…', 'verlo' ),
+						__( 'Tightening the writing to sound human…', 'verlo' ),
+						__( 'Optimising on-page SEO and meta…', 'verlo' ),
+						__( 'Selecting and placing images…', 'verlo' ),
+						__( 'Converting to clean editor blocks…', 'verlo' ),
+					),
+					/* translators: %s: elapsed time, e.g. "45s" or "2m 10s" */
+					'finishingUp'     => __( 'Finishing up, working on it (%s elapsed)', 'verlo' ),
+					'done'            => __( 'Done. Loading your draft…', 'verlo' ),
+					'generationFailed' => __( 'Generation failed', 'verlo' ),
+					'somethingWrong'  => __( 'Something went wrong.', 'verlo' ),
+					'reload'          => __( 'Reload', 'verlo' ),
+					'stillWorking'    => __( 'Still working. If it does not finish shortly you can run it directly:', 'verlo' ),
+					'runNow'          => __( 'Run now', 'verlo' ),
+					'running'         => __( 'Running… this can take a minute, please keep this tab open.', 'verlo' ),
+				) );
+			?>;
+
 			// Stage messages that PROGRESS forward through the real pipeline once,
 			// then settle into a calm "still working" state with elapsed time —
 			// rather than looping the same list endlessly (which feels fake). The
 			// final phase holds until the job actually completes.
-			var phases = [
-				'Reading your content brief…',
-				'Studying the outline and search intent…',
-				'Drafting the introduction…',
-				'Writing the main sections…',
-				'Weaving in your internal links…',
-				'Composing the FAQ…',
-				'Tightening the writing to sound human…',
-				'Optimising on-page SEO and meta…',
-				'Selecting and placing images…',
-				'Converting to clean editor blocks…'
-			];
+			var phases = I18N.phases;
 			var startedAt = Date.now();
 			var pi = 0;
 			function fmtElapsed(){
@@ -630,9 +737,9 @@ class Verlo_Brief_Admin {
 					// yet: stop pretending, show an honest waiting state with a
 					// live elapsed timer.
 					clearInterval(roll);
-					if(msgEl){ msgEl.textContent = 'Finishing up, working on it (' + fmtElapsed() + ' elapsed)'; }
+					if(msgEl){ msgEl.textContent = I18N.finishingUp.replace('%s', fmtElapsed()); }
 					elapsedTick = setInterval(function(){
-						if(msgEl && !finished){ msgEl.textContent = 'Finishing up, working on it (' + fmtElapsed() + ' elapsed)'; }
+						if(msgEl && !finished){ msgEl.textContent = I18N.finishingUp.replace('%s', fmtElapsed()); }
 					}, 1000);
 				}
 			}
@@ -647,7 +754,7 @@ class Verlo_Brief_Admin {
 				if(finished) return;       // never reload more than once
 				finished = true;
 				clearInterval(roll); clearInterval(timer); if(elapsedTick) clearInterval(elapsedTick);
-				if(msgEl){ msgEl.textContent = 'Done. Loading your draft…'; }
+				if(msgEl){ msgEl.textContent = I18N.done; }
 				// Reload WITHOUT the "__generating__" flag so the finished page
 				// renders the draft panel cleanly and never re-enters polling.
 				var u = window.location.href
@@ -660,8 +767,8 @@ class Verlo_Brief_Admin {
 				finished = true;
 				clearInterval(roll); clearInterval(timer); if(elapsedTick) clearInterval(elapsedTick);
 				var t = box.querySelector('.verlo-gen-title');
-				if(t){ t.textContent = 'Generation failed'; }
-				if(msgEl){ msgEl.innerHTML = (msg || 'Something went wrong.') + ' &nbsp;<a href="javascript:window.location.reload()">Reload</a>'; }
+				if(t){ t.textContent = I18N.generationFailed; }
+				if(msgEl){ msgEl.innerHTML = (msg || I18N.somethingWrong) + ' &nbsp;<a href="javascript:window.location.reload()">' + I18N.reload + '</a>'; }
 				var sp = box.querySelector('.verlo-spinner');
 				if(sp){ sp.style.display = 'none'; }
 			}
@@ -726,13 +833,13 @@ class Verlo_Brief_Admin {
 				if(finished) return;
 				var note = box.querySelector('.verlo-gen-note');
 				if(note && !document.getElementById('verlo-run-now')){
-					note.innerHTML = 'Still working. If it does not finish shortly you can run it directly: '
-						+ '<button type="button" class="button button-small" id="verlo-run-now">Run now</button> '
+					note.innerHTML = I18N.stillWorking + ' '
+						+ '<button type="button" class="button button-small" id="verlo-run-now">' + I18N.runNow + '</button> '
 						+ '<span id="verlo-run-now-msg" style="color:#646970;"></span>';
 					document.getElementById('verlo-run-now').addEventListener('click', function(){
 						this.disabled = true;
 						var m = document.getElementById('verlo-run-now-msg');
-						if(m){ m.textContent = ' Running… this can take a minute, please keep this tab open.'; }
+						if(m){ m.textContent = ' ' + I18N.running; }
 						poll(true);
 					});
 				}
@@ -751,9 +858,10 @@ class Verlo_Brief_Admin {
 			function isDirty(){
 				return new URLSearchParams(new FormData(briefForm)).toString() !== initial;
 			}
+			var confirmMsg = <?php echo wp_json_encode( __( 'This brief has unsaved changes. Generating now uses the last SAVED version, not your edits. Continue anyway, or cancel and save first?', 'verlo' ) ); ?>;
 			document.querySelectorAll('form[data-verlo-confirm-unsaved]').forEach(function(f){
 				f.addEventListener('submit', function(e){
-					if(isDirty() && !confirm('This brief has unsaved changes. Generating now uses the last SAVED version, not your edits. Continue anyway, or cancel and save first?')){
+					if(isDirty() && !confirm(confirmMsg)){
 						e.preventDefault();
 					}
 				});
@@ -791,7 +899,7 @@ class Verlo_Brief_Admin {
 	public static function handle_generate_next() {
 		self::guard( 'verlo_brief_generate_next' );
 		$next = Verlo_Strategist::pick_next();
-		if ( ! $next ) { self::redirect( 'Every planned article already has a brief.' ); }
+		if ( ! $next ) { self::redirect( __( 'Every planned article already has a brief.', 'verlo' ) ); }
 		Verlo_Async_Job::queue( 'brief-next', array( 'article_id' => $next['id'] ) );
 		self::redirect( '__working__' );
 	}
@@ -800,7 +908,7 @@ class Verlo_Brief_Admin {
 		self::guard( 'verlo_brief_save' );
 		$aid = (int) ( $_POST['article_id'] ?? 0 );
 		$b   = Verlo_Brief::get( $aid );
-		if ( ! $b ) { self::redirect( 'Brief not found.', true ); }
+		if ( ! $b ) { self::redirect( __( 'Brief not found.', 'verlo' ), true ); }
 
 		$lines = function ( $key ) {
 			$raw = (string) wp_unslash( $_POST[ $key ] ?? '' );
@@ -854,10 +962,12 @@ class Verlo_Brief_Admin {
 		// failure path, not worth the extra plumbing to thread $aid through
 		// the generic async status response just for the error branch.
 		if ( 'next' === ( $_POST['then'] ?? '' ) ) {
-			$prefix = empty( $dropped ) ? 'Brief saved. ' : 'Brief saved (removed ' . count( $dropped ) . ' off-site link(s)). ';
+			$prefix = empty( $dropped )
+				? __( 'Brief saved. ', 'verlo' )
+				: sprintf( /* translators: %d: number of removed links */ __( 'Brief saved (removed %d off-site link(s)). ', 'verlo' ), count( $dropped ) );
 			$next   = Verlo_Strategist::pick_next();
 			if ( ! $next ) {
-				self::redirect_to_brief( $aid, $prefix . 'Every planned article now has a brief.' );
+				self::redirect_to_brief( $aid, $prefix . __( 'Every planned article now has a brief.', 'verlo' ) );
 			}
 			Verlo_Async_Job::queue( 'brief-next', array( 'article_id' => $next['id'], 'prefix' => $prefix ) );
 			self::redirect( '__working__' );
@@ -865,17 +975,27 @@ class Verlo_Brief_Admin {
 
 		if ( ! empty( $dropped ) ) {
 			$shown = array_slice( $dropped, 0, 3 );
-			$more  = count( $dropped ) > 3 ? ' and ' . ( count( $dropped ) - 3 ) . ' more' : '';
-			self::redirect_to_brief( $aid, 'Brief saved. Removed ' . count( $dropped ) . ' link(s) not on your site: ' . implode( ', ', $shown ) . $more . '. Internal links must point to your own domain.', true );
+			$more  = count( $dropped ) > 3 ? ' ' . sprintf( /* translators: %d: number of additional dropped links not shown */ __( 'and %d more', 'verlo' ), count( $dropped ) - 3 ) : '';
+			self::redirect_to_brief(
+				$aid,
+				sprintf(
+					/* translators: 1: number of dropped links, 2: comma-separated list of dropped links, 3: "and N more" suffix or empty */
+					__( 'Brief saved. Removed %1$d link(s) not on your site: %2$s%3$s. Internal links must point to your own domain.', 'verlo' ),
+					count( $dropped ),
+					implode( ', ', $shown ),
+					$more
+				),
+				true
+			);
 		}
-		self::redirect_to_brief( $aid, 'Brief saved.' );
+		self::redirect_to_brief( $aid, __( 'Brief saved.', 'verlo' ) );
 	}
 
 	public static function handle_delete() {
 		self::guard( 'verlo_brief_delete' );
 		$aid = (int) ( $_POST['article_id'] ?? 0 );
 		Verlo_Brief::delete( $aid );
-		self::redirect( 'Brief deleted.' );
+		self::redirect( __( 'Brief deleted.', 'verlo' ) );
 	}
 
 	/**
@@ -892,9 +1012,13 @@ class Verlo_Brief_Admin {
 
 		$result = Verlo_Article_Log::restore( $post_id, $version );
 		if ( is_wp_error( $result ) ) {
-			self::redirect( 'Could not restore that version: ' . $result->get_error_message(), true );
+			self::redirect( sprintf( /* translators: %s: error message */ __( 'Could not restore that version: %s', 'verlo' ), $result->get_error_message() ), true );
 		}
-		self::redirect( 'Restored version ' . $version . '. The live draft now matches it — this is recorded as a new version, so nothing that was live before is lost either.' );
+		self::redirect( sprintf(
+			/* translators: %d: version number restored */
+			__( 'Restored version %d. The live draft now matches it — this is recorded as a new version, so nothing that was live before is lost either.', 'verlo' ),
+			$version
+		) );
 	}
 
 	public static function handle_generate_article() {
@@ -902,7 +1026,7 @@ class Verlo_Brief_Admin {
 		$aid = (int) ( $_POST['article_id'] ?? 0 );
 		$res = Verlo_Generator::queue_draft( $aid );
 		if ( is_wp_error( $res ) ) {
-			self::redirect_to_brief( $aid, 'Could not start generation: ' . $res->get_error_message(), true, Verlo_SaaS_Client::is_billing_error( $res ) );
+			self::redirect_to_brief( $aid, sprintf( /* translators: %s: error message */ __( 'Could not start generation: %s', 'verlo' ), $res->get_error_message() ), true, Verlo_SaaS_Client::is_billing_error( $res ) );
 		}
 		// Return immediately; the brief page shows a live progress state and
 		// polls for completion, so the browser never waits on the API call.
@@ -911,7 +1035,7 @@ class Verlo_Brief_Admin {
 
 	protected static function guard( $nonce ) {
 		if ( ! current_user_can( 'manage_options' ) || ! check_admin_referer( $nonce ) ) {
-			wp_die( 'Permission denied.' );
+			wp_die( esc_html__( 'Permission denied.', 'verlo' ) );
 		}
 	}
 

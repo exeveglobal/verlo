@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.19
+Stable tag: 1.1.20
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,9 @@ Yes, but a key is only active on one site at a time. Remove it from the current 
 Verlo doesn't expose which AI provider or model it uses in any part of the plugin, its output, or its support channels — this is intentional and not configurable.
 
 == Changelog ==
+
+= 1.1.20 =
+* Every user-facing string across every admin screen is now translatable (proper `__()`/`_e()` wrapping under the "verlo" text domain, including strings inside the progress-overlay and article-generation scripts), and the plugin now actually loads a translation if one is shipped in /languages — previously the plugin declared a text domain but nothing in it was translatable.
 
 = 1.1.19 =
 * Analyzing your site, generating a topical map, and generating a content brief no longer risk a timeout error on hosts with short request limits. These AI calls now run in the background with a live progress indicator, the same way article generation already worked, instead of holding the page's own request open for up to 90 seconds waiting on a response.
