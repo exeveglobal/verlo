@@ -6,7 +6,13 @@
 # sites. So instead of a server deploy, this workflow builds a clean zip and
 # attaches it to a GitHub Release whenever you push a version tag.
 #
-# Usage: bump the version number in verlo.php's plugin header, then:
+# Part of the three-tier flow: main (dev) -> testnet (staging-deploy.yml,
+# FTP-deploys to the demo site for manual QA) -> production (this file —
+# once testnet has been approved by hand, merging into production is what
+# actually ships). Triggers on push to production, not main.
+#
+# Usage: bump the version number in verlo.php's plugin header, merge into
+# production, then:
 #   git tag v1.2.0 && git push origin v1.2.0
 #
 # Pure PHP plugin, no build step — no VPS secrets, no Node setup needed.
@@ -16,7 +22,7 @@ name: Release verlo plugin
 on:
   push:
     branches:
-      - main
+      - production
     tags:
       - "v*.*.*"
   workflow_dispatch: {}

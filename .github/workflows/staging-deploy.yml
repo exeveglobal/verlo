@@ -1,0 +1,70 @@
+# ==============================================================================
+# verlo (WordPress plugin) — staging deploy
+# Path in your repo: .github/workflows/staging-deploy.yml
+#
+# Part of the three-tier flow: main (dev) -> testnet (this file — builds and
+# FTP-deploys straight to the demo WordPress site for manual QA) ->
+# production (release.yml, once testnet has been approved by hand on the
+# demo site).
+#
+# Demo site: https://flooring.exeve.lk
+# FTP credentials live in repo secrets (FTP_HOST/FTP_USERNAME/FTP_PASSWORD) —
+# never hardcode them here.
+# ==============================================================================
+name: Deploy verlo plugin to staging
+
+on:
+  push:
+    branches:
+      - testnet
+  workflow_dispatch: {}
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same gate as ci.yml/release.yml — a merge into testnet skips
+      # ci.yml's own push trigger (that only fires on main), so this repeats
+      # the check here rather than trusting it already happened upstream.
+      - name: Check for BOM and stray leading bytes
+        run: |
+          bad=0
+          while IFS= read -r f; do
+            if [ "$(head -c 5 "$f")" != "<?php" ]; then
+              echo "File does not start with <?php (BOM or stray bytes): $f"
+              bad=1
+            fi
+          done < <(find . -name '*.php' -not -path './.git/*')
+          exit $bad
+
+      - name: PHP syntax lint
+        run: |
+          bad=0
+          while IFS= read -r f; do
+            php -l "$f" > /dev/null || bad=1
+          done < <(find . -name '*.php' -not -path './.git/*')
+          exit $bad
+
+      - name: Package plugin build
+        run: |
+          mkdir -p build/verlo
+          rsync -a \
+            --exclude='.git' --exclude='.github' \
+            --exclude='CLAUDE.md' --exclude='.gitattributes' --exclude='.gitignore' \
+            ./ build/verlo/
+
+      # dangerous-clean-slate is deliberately left off (default) — this only
+      # ever adds/updates files under the plugin's own folder, never deletes
+      # anything on the server that isn't part of this build.
+      - name: FTP deploy to demo site
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: 21
+          protocol: ftp
+          local-dir: build/verlo/
+          server-dir: public_html/sub_domains/flooringlk/wp-content/plugins/verlo/
