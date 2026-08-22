@@ -36,11 +36,14 @@ $wpdb->query(
 	)
 );
 
-// Per-article generation locks, e.g. _verlo_lock_verlo_gen_lock_123.
+// Per-article generation locks, e.g. _verlo_lock_verlo_gen_lock_123, and
+// Verlo_Async_Job's site-level job locks, e.g. _verlo_async_lock_analyze
+// (a different prefix than the one above - not caught by it).
 $wpdb->query(
 	$wpdb->prepare(
-		"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
-		$wpdb->esc_like( '_verlo_lock_' ) . '%'
+		"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+		$wpdb->esc_like( '_verlo_lock_' ) . '%',
+		$wpdb->esc_like( '_verlo_async_lock_' ) . '%'
 	)
 );
 
