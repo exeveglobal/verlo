@@ -150,7 +150,15 @@ class Verlo_Profile_Admin {
 				startRolling(btn.getAttribute('data-verlo-phases') || 'generic');
 				overlay.style.display = 'block';
 			}, true);
-			window.addEventListener('pageshow', function(){
+			// Only reset on an actual back/forward-cache restore (a stale overlay
+			// from before the user navigated away) - pageshow ALSO fires on
+			// every normal fresh page load, including the one right below that
+			// intentionally turns the overlay back on to resume watching a
+			// queued job; without the event.persisted check this ran straight
+			// after that and hid it immediately, leaving the poll running
+			// invisibly until the page jumped straight to "done".
+			window.addEventListener('pageshow', function(e){
+				if(!e.persisted) return;
 				overlay.style.display = 'none';
 				if(roll){ clearInterval(roll); roll = null; }
 			});
