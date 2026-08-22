@@ -76,6 +76,10 @@ class Verlo_Profile_Admin {
 			'stillWorking'   => __( 'Still working (%s elapsed)…', 'verlo' ),
 			'done'           => __( 'Done.', 'verlo' ),
 			'somethingWrong' => __( 'Something went wrong.', 'verlo' ),
+			'stuckTitle'     => __( "This is taking longer than expected.", 'verlo' ),
+			'stuckBody'      => __( "The task may still finish in the background. Reload the page to check, or wait a bit longer.", 'verlo' ),
+			'reloadNow'      => __( 'Reload now', 'verlo' ),
+			'keepWaiting'    => __( 'Keep waiting', 'verlo' ),
 		) );
 		?>
 		<div id="verlo-overlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(255,255,255,.82);backdrop-filter:saturate(1) blur(1px);">
@@ -86,6 +90,14 @@ class Verlo_Profile_Admin {
 					<div style="height:100%;width:40%;border-radius:999px;background:#2271b1;animation:verlo-bar 1.1s ease-in-out infinite;"></div>
 				</div>
 				<div style="margin-top:10px;font-size:12px;color:#646970;"><?php esc_html_e( 'This can take a few seconds. Please keep this tab open.', 'verlo' ); ?></div>
+				<div id="verlo-overlay-stuck" style="display:none;margin-top:16px;padding-top:14px;border-top:1px solid #eef0f2;">
+					<div style="font-size:13px;font-weight:600;color:#9a6700;" id="verlo-overlay-stuck-title"></div>
+					<div style="margin-top:4px;font-size:12px;color:#646970;" id="verlo-overlay-stuck-body"></div>
+					<div style="margin-top:10px;display:flex;gap:10px;justify-content:center;align-items:center;">
+						<button type="button" id="verlo-overlay-reload" class="button button-small"></button>
+						<button type="button" id="verlo-overlay-keep-waiting" class="button-link" style="font-size:12px;"></button>
+					</div>
+				</div>
 			</div>
 		</div>
 		<style>
@@ -178,7 +190,39 @@ class Verlo_Profile_Admin {
 
 					var inflight = false, consecutiveFailures = 0, pollTimer = null;
 
+					// Safety net: however this got stuck (a host that kills a
+					// long-running self-heal request before it can report back,
+					// a genuinely orphaned job, anything else) the one thing
+					// that must never happen is a silent spinner with no way
+					// out. Verlo_Async_Job's own lock reclaims and retries an
+					// abandoned job on its own after LOCK_TTL (150s) - this
+					// fires a bit after that, so by the time it's shown, the
+					// system has already had its real chance to self-heal.
+					var stuckPanel = document.getElementById('verlo-overlay-stuck');
+					var stuckTimer = null;
+					if (stuckPanel) {
+						document.getElementById('verlo-overlay-stuck-title').textContent = I18N.stuckTitle;
+						document.getElementById('verlo-overlay-stuck-body').textContent = I18N.stuckBody;
+						document.getElementById('verlo-overlay-reload').textContent = I18N.reloadNow;
+						document.getElementById('verlo-overlay-keep-waiting').textContent = I18N.keepWaiting;
+						document.getElementById('verlo-overlay-reload').addEventListener('click', function(){
+							window.location.reload();
+						});
+						document.getElementById('verlo-overlay-keep-waiting').addEventListener('click', function(){
+							stuckPanel.style.display = 'none';
+							armStuckTimer(); // re-arm; shows again if it's STILL not done later
+						});
+					}
+					function armStuckTimer(){
+						if (stuckTimer) { clearTimeout(stuckTimer); }
+						stuckTimer = setTimeout(function(){
+							if (stuckPanel) { stuckPanel.style.display = 'block'; }
+						}, 170000);
+					}
+					armStuckTimer();
+
 					function stripAndReload(extra){
+						if (stuckTimer) { clearTimeout(stuckTimer); }
 						var u = new URL(cfg.baseUrl, window.location.href);
 						Object.keys(extra || {}).forEach(function(k){ u.searchParams.set(k, extra[k]); });
 						window.location.replace(u.toString());
