@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.21
+Stable tag: 1.1.22
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,9 @@ Yes, but a key is only active on one site at a time. Remove it from the current 
 Verlo doesn't expose which AI provider or model it uses in any part of the plugin, its output, or its support channels — this is intentional and not configurable.
 
 == Changelog ==
+
+= 1.1.22 =
+* Added a safety net to the Analyze/Generate map/Generate brief progress screen: if it's genuinely still working almost three minutes later (well past the point it should have finished, or self-recovered on its own), it now shows a clear "this is taking longer than expected" message with a "Reload now" option, instead of spinning silently with no way to tell whether it's actually stuck.
 
 = 1.1.21 =
 * Fixed the Analyze/Generate map/Generate brief progress overlay disappearing right after it appeared, making the page look like nothing happened until it suddenly refreshed with the finished result a few seconds later. The work itself was always running correctly in the background — only the "please wait" indicator was being hidden a moment after it showed.
