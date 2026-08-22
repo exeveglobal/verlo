@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.22
+Stable tag: 1.1.23
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,9 @@ Yes, but a key is only active on one site at a time. Remove it from the current 
 Verlo doesn't expose which AI provider or model it uses in any part of the plugin, its output, or its support channels — this is intentional and not configurable.
 
 == Changelog ==
+
+= 1.1.23 =
+* Deleting the plugin now also cleans up the background-job locks introduced by the recent Analyze/Generate map/Generate brief timeout fix (they used a naming prefix the existing cleanup didn't catch) - harmless leftovers, but deleting the plugin should mean actually nothing verlo-specific is left behind.
 
 = 1.1.22 =
 * Added a safety net to the Analyze/Generate map/Generate brief progress screen: if it's genuinely still working almost three minutes later (well past the point it should have finished, or self-recovered on its own), it now shows a clear "this is taking longer than expected" message with a "Reload now" option, instead of spinning silently with no way to tell whether it's actually stuck.
