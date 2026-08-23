@@ -180,7 +180,16 @@ class Verlo_Topical_Map {
 			'pillars'      => self::mark_coverage( $pillars ),
 			'audit'        => self::audit_categories( $pillars ),
 		);
-		return self::save( $map );
+		$saved = self::save( $map );
+
+		// Not persisted into the stored map (would show stale billing info on
+		// every future page load) - just attached to this call's own return
+		// value so run_pending() can build an accurate completion message for
+		// the generation that just happened.
+		if ( isset( $result['billing'] ) && is_array( $result['billing'] ) ) {
+			$saved['billing'] = $result['billing'];
+		}
+		return $saved;
 	}
 
 	/**
@@ -469,6 +478,19 @@ class Verlo_Topical_Map {
 		if ( ! empty( $context['force'] ) ) { self::reopen(); }
 		$res = self::generate();
 		if ( is_wp_error( $res ) ) { return $res; }
-		return 'Draft map generated. Review the pillars below, edit as needed, then Approve.';
+
+		$message = 'Draft map generated. Review the pillars below, edit as needed, then Approve.';
+		$billing = isset( $res['billing'] ) && is_array( $res['billing'] ) ? $res['billing'] : null;
+		if ( $billing ) {
+			if ( ! empty( $billing['was_charged'] ) ) {
+				$message .= ' You used your ' . (int) ( $billing['free_included_per_month'] ?? 3 )
+					. ' free regenerations for this month, so this one used your Verlo wallet'
+					. ( isset( $billing['amount_charged_usd'] ) ? ' ($' . number_format( (float) $billing['amount_charged_usd'], 2 ) . ' charged).' : '.' );
+			} else {
+				$remaining = (int) ( $billing['free_remaining_this_month'] ?? 0 );
+				$message  .= ' ' . $remaining . ' free regeneration' . ( 1 === $remaining ? '' : 's' ) . ' left this month.';
+			}
+		}
+		return $message;
 	}
 }

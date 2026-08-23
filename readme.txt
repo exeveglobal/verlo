@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.23
+Stable tag: 1.1.24
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,9 @@ Yes, but a key is only active on one site at a time. Remove it from the current 
 Verlo doesn't expose which AI provider or model it uses in any part of the plugin, its output, or its support channels — this is intentional and not configurable.
 
 == Changelog ==
+
+= 1.1.24 =
+* Topical map regeneration no longer has a hard 30-day wait — you get 3 free regenerations every month, and any beyond that are billed to your Verlo wallet at a clear, upfront rate instead of blocking you. The Topical Map page now shows exactly where you stand ("2 of 3 free regenerations left this month") before you click Generate, and confirms afterward whether that generation was free or charged. Requires the matching verlo-saas backend update.
 
 = 1.1.23 =
 * Deleting the plugin now also cleans up the background-job locks introduced by the recent Analyze/Generate map/Generate brief timeout fix (they used a naming prefix the existing cleanup didn't catch) - harmless leftovers, but deleting the plugin should mean actually nothing verlo-specific is left behind.

@@ -40,6 +40,12 @@ class Verlo_Map_Admin {
 		$url      = admin_url( 'admin-post.php' );
 		$draft    = ( 'draft' === $map['status'] );
 		$approved = ( 'approved' === $map['status'] );
+		// Proactive free-regeneration status, shown BEFORE the customer
+		// clicks Generate rather than only after a wallet charge or an
+		// error - null on any failure (offline SaaS, etc.), in which case
+		// the status line below is simply skipped; Generate itself is
+		// never blocked by this being unavailable.
+		$limits = $connected ? Verlo_SaaS_Client::topical_map_limits() : null;
 		?>
 		<div class="wrap verlo-wrap">
 			<h1><?php esc_html_e( 'Topical Map', 'verlo' ); ?>
@@ -99,6 +105,31 @@ class Verlo_Map_Admin {
 					}
 					?>
 				</p>
+				<?php if ( $limits ) : ?>
+					<p class="verlo-sub" style="margin-top:-8px;">
+						<?php if ( (int) $limits['free_remaining'] > 0 ) : ?>
+							<?php
+							printf(
+								/* translators: 1: free regenerations remaining this month, 2: total free per month */
+								esc_html__( '%1$d of %2$d free regenerations left this month.', 'verlo' ),
+								(int) $limits['free_remaining'],
+								(int) $limits['free_included_per_month']
+							);
+							?>
+						<?php else : ?>
+							<span style="color:#9a6700;">
+								<?php
+								printf(
+									/* translators: 1: free regenerations per month, 2: overage price in USD */
+									esc_html__( "You've used your %1\$d free regenerations this month. The next one will charge $%2\$s from your Verlo wallet.", 'verlo' ),
+									(int) $limits['free_included_per_month'],
+									number_format( (float) $limits['overage_usd'], 2 )
+								);
+								?>
+							</span>
+						<?php endif; ?>
+					</p>
+				<?php endif; ?>
 				<?php if ( $draft && ! empty( $stats['thin'] ) ) : ?>
 					<div class="notice notice-warning inline" style="margin:4px 0 12px;"><p>
 						<?php

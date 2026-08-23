@@ -243,6 +243,33 @@ class Verlo_SaaS_Client {
 	}
 
 	/**
+	 * Read-only topical-map free-regeneration status for this site this
+	 * calendar month, so the Topical Map page can show the customer where
+	 * they stand BEFORE they click Generate, not just after a wallet charge
+	 * or an error. Returns
+	 * [ 'free_included_per_month', 'used_this_month', 'free_remaining', 'overage_usd' ]
+	 * or null on any failure — purely informational, so a failure here must
+	 * never block the actual Generate action, just hide the status line.
+	 */
+	public static function topical_map_limits() {
+		$token = Verlo_Auth::token();
+		if ( is_wp_error( $token ) ) { return null; }
+
+		$url      = self::base_url() . '/v1/jobs/topical-map/limits';
+		$response = wp_remote_get( $url, array(
+			'timeout' => 10,
+			'headers' => array( 'Authorization' => 'Bearer ' . $token ),
+		) );
+
+		if ( is_wp_error( $response ) ) { return null; }
+		if ( 200 !== (int) wp_remote_retrieve_response_code( $response ) ) { return null; }
+
+		$data = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( ! is_array( $data ) || ! isset( $data['free_included_per_month'] ) ) { return null; }
+		return $data;
+	}
+
+	/**
 	 * Base URL for all SaaS requests.
 	 * Override via VERLO_SAAS_URL constant (for local dev) or settings.
 	 */
