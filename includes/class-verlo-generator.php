@@ -135,7 +135,12 @@ class Verlo_Generator {
 	public static function run_pending( $article_id, $source ) {
 		$article_id = (int) $article_id;
 		$brief      = Verlo_Brief::get( $article_id );
-		if ( ! $brief ) { return 'no_brief'; }
+		if ( ! $brief ) {
+			Verlo_Log::warn( 'gen.no_brief', 'Background worker found no brief for this article', array(
+				'article_id' => $article_id, 'source' => $source,
+			) );
+			return 'no_brief';
+		}
 
 		// Already finished?
 		if ( ! empty( $brief['draft']['post_id'] ) && get_post( (int) $brief['draft']['post_id'] ) ) {
@@ -147,7 +152,24 @@ class Verlo_Generator {
 		}
 
 		$status = Verlo_Brief::get_gen_status( $article_id );
-		if ( 'error' === $status['state'] ) { return 'errored'; }
+		// This early return is the single most important line in this file for
+		// diagnosing a "nothing happens" report: it means SOME earlier attempt
+		// already failed and left status 'error', and every subsequent
+		// loopback/cron/self-heal call is declining to auto-retry a failed job
+		// (only a fresh user-initiated queue_draft() call resets status). If
+		// this fires immediately after a fresh "Generate" click rather than
+		// after a real wait, queue_draft()'s set_gen_status('queued', ...)
+		// isn't winning its race against a fast loopback/self-heal call — that
+		// race, not this line itself, is the bug to chase next.
+		if ( 'error' === $status['state'] ) {
+			Verlo_Log::info( 'gen.declined_stale_error', 'Declined to auto-retry: status was already \'error\'', array(
+				'article_id'      => $article_id,
+				'source'          => $source,
+				'existing_message' => $status['message'],
+				'status_age_s'    => time() - (int) $status['updated_at'],
+			) );
+			return 'errored';
+		}
 
 		// Only defer to "another worker" if the generation lock is actually held
 		// (a request is genuinely mid-API-call). If the lock is free, no worker
@@ -155,6 +177,13 @@ class Verlo_Generator {
 		// that has since died — so we take over now rather than waiting out a
 		// fixed timeout. The lock itself prevents any duplicate paid API call.
 		if ( self::lock_held( 'verlo_gen_lock_' . $article_id ) ) {
+			$lock_raw = (string) get_option( '_verlo_lock_verlo_gen_lock_' . $article_id, '' );
+			Verlo_Log::warn( 'gen.locked_busy', 'Declined to run: generation lock is held by another worker', array(
+				'article_id'   => $article_id,
+				'source'       => $source,
+				'lock_age_s'   => $lock_raw ? ( time() - (int) strtok( $lock_raw, '|' ) ) : null,
+				'lock_ttl_s'   => self::LOCK_TTL,
+			) );
 			return 'locked_busy';
 		}
 
@@ -184,6 +213,9 @@ class Verlo_Generator {
 		}
 		if ( is_wp_error( $res ) ) {
 			if ( 'verlo_in_progress' === $res->get_error_code() ) {
+				Verlo_Log::info( 'gen.in_progress', 'generate_draft() found its own lock already held; leaving status as running for the next poll', array(
+					'run_id' => $run_id, 'article_id' => $article_id, 'source' => $source,
+				) );
 				return 'in_progress';
 			}
 			Verlo_Log::from_wp_error( 'gen.error', $res, array( 'run_id' => $run_id, 'article_id' => $article_id, 'source' => $source ) );
@@ -210,6 +242,19 @@ class Verlo_Generator {
 		$expected   = get_transient( 'verlo_gen_token_' . $article_id );
 
 		if ( ! $article_id || ! $expected || ! hash_equals( (string) $expected, $token ) ) {
+			// A rejected loopback call is silent by default from the browser's
+			// point of view (the original request already returned and moved
+			// on) - if this is the ONLY thing that ever runs for a queued job
+			// (WP-Cron blocked, self-heal not yet due), the job just looks
+			// stuck with zero explanation anywhere. Log it so that trail
+			// exists: a missing/expired transient usually means the loopback
+			// arrived unusually late (host under load, or a security plugin
+			// delaying/duplicating the request), not a code bug.
+			Verlo_Log::warn( 'gen.loopback_rejected', 'Loopback worker request rejected: missing/expired/mismatched token', array(
+				'article_id'      => $article_id,
+				'had_token'       => '' !== $token,
+				'transient_found' => false !== $expected,
+			) );
 			status_header( 403 );
 			exit;
 		}

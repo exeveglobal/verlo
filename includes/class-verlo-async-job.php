@@ -168,6 +168,13 @@ class Verlo_Async_Job {
 		$expected = get_transient( 'verlo_async_token_' . $job_key );
 
 		if ( ! $job_key || ! $expected || ! hash_equals( (string) $expected, $token ) ) {
+			if ( class_exists( 'Verlo_Log' ) ) {
+				Verlo_Log::warn( 'async.loopback_rejected', 'Loopback worker request rejected: missing/expired/mismatched token', array(
+					'job_key'         => $job_key,
+					'had_token'       => '' !== $token,
+					'transient_found' => false !== $expected,
+				) );
+			}
 			status_header( 403 );
 			exit;
 		}
@@ -195,15 +202,48 @@ class Verlo_Async_Job {
 	 */
 	public static function run_pending( $job_key, $source ) {
 		$runner = self::runner( $job_key );
-		if ( ! $runner ) { return 'unknown_job'; }
+		if ( ! $runner ) {
+			if ( class_exists( 'Verlo_Log' ) ) {
+				Verlo_Log::warn( 'async.unknown_job', 'Background worker called with an unrecognised job_key', array(
+					'job_key' => $job_key, 'source' => $source,
+				) );
+			}
+			return 'unknown_job';
+		}
 
 		$status = self::get_status( $job_key );
 		if ( ! in_array( $status['state'], array( 'queued', 'running' ), true ) ) {
-			return 'nothing_pending'; // idle/done/error: no work queued right now
+			// idle/done are the normal steady state once polling catches up -
+			// not logged, would just be noise. 'error' specifically means an
+			// earlier attempt already failed and this call (loopback/cron/
+			// self-heal) is correctly declining to auto-retry it; that IS
+			// worth a trace, since it's the top suspect whenever a fresh
+			// "Generate" click appears to do nothing - only a new queue() call
+			// resets status, so if this fires right after a fresh click rather
+			// than after a real wait, queue()'s status write isn't winning its
+			// race against a fast loopback/self-heal call.
+			if ( 'error' === $status['state'] && class_exists( 'Verlo_Log' ) ) {
+				Verlo_Log::info( 'async.declined_stale_error', 'Declined to auto-retry: status was already \'error\'', array(
+					'job_key'          => $job_key,
+					'source'           => $source,
+					'existing_message' => $status['message'],
+					'status_age_s'     => time() - (int) $status['updated_at'],
+				) );
+			}
+			return 'nothing_pending';
 		}
 
 		$lock_token = self::acquire_lock( $job_key );
 		if ( false === $lock_token ) {
+			if ( class_exists( 'Verlo_Log' ) ) {
+				$lock_raw = (string) get_option( '_verlo_async_lock_' . $job_key, '' );
+				Verlo_Log::warn( 'async.locked_busy', 'Declined to run: job lock is held by another worker', array(
+					'job_key'     => $job_key,
+					'source'      => $source,
+					'lock_age_s'  => $lock_raw ? ( time() - (int) strtok( $lock_raw, '|' ) ) : null,
+					'lock_ttl_s'  => self::LOCK_TTL,
+				) );
+			}
 			return 'locked_busy'; // another worker is genuinely mid-run
 		}
 
