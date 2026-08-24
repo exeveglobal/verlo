@@ -260,14 +260,18 @@ class Verlo_Generator {
 		}
 		delete_transient( 'verlo_gen_token_' . $article_id );
 
-		Verlo_Brief::set_gen_status( $article_id, 'running', 'Writing the article…' );
-
-		$res = self::generate_draft( $article_id );
-		if ( is_wp_error( $res ) ) {
-			Verlo_Brief::set_gen_status( $article_id, 'error', $res->get_error_message() );
-		} else {
-			Verlo_Brief::set_gen_status( $article_id, 'done', 'Draft article created.' );
-		}
+		// This used to duplicate run_pending()'s work inline (set 'running',
+		// call generate_draft(), set 'done'/'error') instead of calling it -
+		// which meant the loopback, the actual FIRST and fastest of the three
+		// dispatch paths to reach a real article on every attempt, skipped
+		// run_pending()'s lock check (a second concurrent caller couldn't be
+		// deferred, only generate_draft()'s OWN inner lock caught that) and,
+		// critically, never logged anything on failure. Confirmed live
+		// 2026-08-24: this is why every "gen.declined_stale_error" trace from
+		// the cron fallback found a real, fresh error with no explanation
+		// anywhere - the loopback had already failed here, silently, every
+		// single time, moments before cron ever checked.
+		self::run_pending( $article_id, 'loopback' );
 		exit;
 	}
 
