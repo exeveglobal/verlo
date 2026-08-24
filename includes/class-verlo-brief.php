@@ -68,7 +68,7 @@ class Verlo_Brief {
 	public static function get_gen_status( $article_id ) {
 		$raw = get_option( self::gen_status_option( $article_id ), array() );
 		return wp_parse_args( is_array( $raw ) ? $raw : array(), array(
-			'state' => 'idle', 'message' => '', 'updated_at' => 0, 'run_id' => '', 'queued_at' => 0,
+			'state' => 'idle', 'message' => '', 'updated_at' => 0, 'run_id' => '', 'queued_at' => 0, 'saas_job_id' => '',
 		) );
 	}
 
@@ -87,20 +87,28 @@ class Verlo_Brief {
 	 * second run's own duration reflects how long the user actually waited.
 	 * Confirmed live 2026-08-24: exactly this sequence displayed "generated
 	 * in 4.4s" for a request that had genuinely taken over 7 minutes.
+	 *
+	 * saas_job_id carries the in-flight SaaS job id across invocations (see
+	 * Verlo_Generator::do_generate_draft() - generation is now submit-then-
+	 * poll rather than one call that blocks until the AI write finishes), so
+	 * a fresh 'queued' clears it same as it resets queued_at, but every other
+	 * transition preserves whatever set_saas_job() last stored.
 	 */
 	public static function set_gen_status( $article_id, $state, $message = '' ) {
 		$current = self::get_gen_status( $article_id );
 		$still_in_flight = in_array( $current['state'], array( 'queued', 'running' ), true );
+		$fresh_cycle = ( 'queued' === $state && ! $still_in_flight );
 		update_option( self::gen_status_option( $article_id ), array(
-			'state'      => $state,
-			'message'    => $message,
-			'updated_at' => time(),
-			'run_id'     => $current['run_id'],
+			'state'       => $state,
+			'message'     => $message,
+			'updated_at'  => time(),
+			'run_id'      => $current['run_id'],
 			// A fresh 'queued' starts a new cycle's clock; anything else
 			// (including a fresh 'queued' arriving mid-cycle, which
 			// shouldn't happen but would otherwise erase a real start time)
 			// keeps the one already running.
-			'queued_at'  => ( 'queued' === $state && ! $still_in_flight ) ? time() : $current['queued_at'],
+			'queued_at'   => $fresh_cycle ? time() : $current['queued_at'],
+			'saas_job_id' => $fresh_cycle ? '' : $current['saas_job_id'],
 		), 'no' );
 	}
 
@@ -115,11 +123,35 @@ class Verlo_Brief {
 	public static function set_run_id( $article_id, $run_id ) {
 		$current = self::get_gen_status( $article_id );
 		update_option( self::gen_status_option( $article_id ), array(
-			'state'      => $current['state'],
-			'message'    => $current['message'],
-			'updated_at' => $current['updated_at'],
-			'run_id'     => (string) $run_id,
-			'queued_at'  => $current['queued_at'],
+			'state'       => $current['state'],
+			'message'     => $current['message'],
+			'updated_at'  => $current['updated_at'],
+			'run_id'      => (string) $run_id,
+			'queued_at'   => $current['queued_at'],
+			'saas_job_id' => $current['saas_job_id'],
+		), 'no' );
+	}
+
+	/**
+	 * The SaaS job id a generation cycle is currently waiting on, if any.
+	 * Empty string means "not submitted yet" (or the cycle already finished
+	 * and had it cleared) - do_generate_draft() uses that to decide whether
+	 * this invocation should submit a new job or just check on the existing
+	 * one.
+	 */
+	public static function get_saas_job( $article_id ) {
+		return self::get_gen_status( $article_id )['saas_job_id'];
+	}
+
+	public static function set_saas_job( $article_id, $job_id ) {
+		$current = self::get_gen_status( $article_id );
+		update_option( self::gen_status_option( $article_id ), array(
+			'state'       => $current['state'],
+			'message'     => $current['message'],
+			'updated_at'  => $current['updated_at'],
+			'run_id'      => $current['run_id'],
+			'queued_at'   => $current['queued_at'],
+			'saas_job_id' => (string) $job_id,
 		), 'no' );
 	}
 
