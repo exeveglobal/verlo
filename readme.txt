@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.27
+Stable tag: 1.1.29
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,12 @@ Yes, but a key is only active on one site at a time. Remove it from the current 
 Verlo doesn't expose which AI provider or model it uses in any part of the plugin, its output, or its support channels — this is intentional and not configurable.
 
 == Changelog ==
+
+= 1.1.29 =
+* Article generation no longer has any single step that stays running for the full length of the AI write (previously up to 3 minutes). That long-running step was the actual cause of the rare stalls behind 1.1.26–1.1.28 — some hosts silently kill a background process that runs that long, with no way for anything to log or recover from it cleanly. Generation now submits the job and checks back on it in a series of short steps instead, driven by the same progress indicator you already see — nothing changes about how you use it, this only removes the failure mode.
+
+= 1.1.28 =
+* Fixed "generated in Xs" showing a misleadingly small number when a generation had actually taken much longer. On a host hiccup, the process that first picks up a Generate click can occasionally stall past its own timeout; when that happens, a later retry gets back the original attempt's already-finished result almost instantly (correctly, to avoid writing — and billing — the same article twice) — but the timer was only measuring that last, fast retry, not the real time since you clicked. It now reports true elapsed time from your click to the finished draft.
 
 = 1.1.27 =
 * Fixed the actual cause behind article generation getting permanently stuck after one failed attempt: the background dispatch path that fires first (moments after clicking Generate) had its own separate, older error-handling that never recorded anything when it failed — so every subsequent check saw a real failure with zero explanation anywhere, and a retry of unchanged content couldn't get past it either (fixed on the backend, see the same-day Verlo service update). This path now goes through the same properly-logged, properly-guarded system as every other retry.

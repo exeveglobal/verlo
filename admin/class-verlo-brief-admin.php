@@ -45,16 +45,24 @@ class Verlo_Brief_Admin {
 		$post_id = $brief && ! empty( $brief['draft']['post_id'] ) ? (int) $brief['draft']['post_id'] : 0;
 
 		// Decide whether this poll should take over and run the job. We do this
-		// when forced, or when the job has stalled past the env-aware delay (on
+		// when forced, when the job has stalled past the env-aware delay (on
 		// sites where background dispatch is known-blocked, this is just a few
 		// seconds, so the open tab finishes the work automatically and fast —
-		// without the user needing to press "Run now").
-		$age       = time() - (int) $status['updated_at'];
-		$delay     = Verlo_Env::self_heal_delay();
-		$stalled   = in_array( $status['state'], array( 'queued', 'running' ), true ) && $age >= $delay;
-		$needs_run = ! $post_id && 'done' !== $status['state'] && 'error' !== $status['state'];
+		// without the user needing to press "Run now"), OR when a SaaS job is
+		// already submitted and in flight for this article — generation is
+		// submit-then-poll now (see Verlo_Generator::do_generate_draft()), so
+		// once a job id exists every check here is a single fast status GET,
+		// never a blocking wait, and it's this condition — not $stalled, which
+		// exists for the DIFFERENT case of nothing having picked the job up at
+		// all — that actually drives queued -> submitted -> ... -> done forward
+		// on every poll while the tab stays open.
+		$age             = time() - (int) $status['updated_at'];
+		$delay           = Verlo_Env::self_heal_delay();
+		$stalled         = in_array( $status['state'], array( 'queued', 'running' ), true ) && $age >= $delay;
+		$has_pending_job = ( 'running' === $status['state'] ) && '' !== Verlo_Brief::get_saas_job( $aid );
+		$needs_run       = ! $post_id && 'done' !== $status['state'] && 'error' !== $status['state'];
 
-		if ( $needs_run && ( $force || $stalled ) ) {
+		if ( $needs_run && ( $force || $stalled || $has_pending_job ) ) {
 			// Run synchronously inside this AJAX request. WordPress admin-ajax is
 			// not subject to the same short nginx proxy timeout as normal admin
 			// page loads on most stacks, and we lift the PHP time limit; if it is
@@ -552,7 +560,7 @@ class Verlo_Brief_Admin {
 								$human = $mins > 0 ? ( $mins . 'm ' . $secs . 's' ) : ( $secs . 's' );
 								printf(
 									/* translators: %s: human-readable generation duration */
-									'<span style="margin-left:8px;color:#646970;font-size:12px;" title="' . esc_attr__( 'Actual server-side generation time', 'verlo' ) . '">' . esc_html__( 'generated in %s', 'verlo' ) . '</span>',
+									'<span style="margin-left:8px;color:#646970;font-size:12px;" title="' . esc_attr__( 'Time from clicking Generate to the draft being ready', 'verlo' ) . '">' . esc_html__( 'generated in %s', 'verlo' ) . '</span>',
 									esc_html( $human )
 								);
 							}
