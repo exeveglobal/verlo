@@ -29,11 +29,18 @@ class Verlo_Async_Job {
 
 	/**
 	 * Which includes/ class+method actually performs job $job_key's work.
-	 * Each callable takes the job's stored context array and returns
-	 * true|string|array{message?,meta?}|WP_Error. Deliberately a fixed map
-	 * (not a WP hook/filter) so this stays simple and statically traceable
-	 * for code this money-sensitive - a lookup miss here must throw, never
-	 * silently no-op a queued job.
+	 * Each callable takes ($job_key, $context) and returns
+	 * true|string|array{message?,meta?}|WP_Error - including, routinely, a
+	 * 'verlo_still_writing' WP_Error while the SaaS job it just submitted or
+	 * checked on isn't done yet (see get_saas_job()/set_saas_job(); each
+	 * runner submits once, then polls once per invocation, never blocking on
+	 * the AI call itself - same pattern as Verlo_Generator::do_generate_draft(),
+	 * for the same reason: a single request blocking for the length of a real
+	 * AI call is exactly what some hosts silently kill, confirmed live
+	 * 2026-08-24 for both the article flow and this one). Deliberately a
+	 * fixed map (not a WP hook/filter) so this stays simple and statically
+	 * traceable for code this money-sensitive - a lookup miss here must
+	 * throw, never silently no-op a queued job.
 	 */
 	protected static function runner( $job_key ) {
 		$map = array(
@@ -47,24 +54,53 @@ class Verlo_Async_Job {
 	public static function get_status( $job_key ) {
 		$raw = get_option( self::status_option( $job_key ), array() );
 		return wp_parse_args( is_array( $raw ) ? $raw : array(), array(
-			'state'      => 'idle',
-			'message'    => '',
-			'updated_at' => 0,
-			'run_id'     => '',
-			'meta'       => array(),
-			'context'    => array(),
+			'state'       => 'idle',
+			'message'     => '',
+			'updated_at'  => 0,
+			'run_id'      => '',
+			'meta'        => array(),
+			'context'     => array(),
+			'queued_at'   => 0,
+			'saas_job_id' => '',
 		) );
 	}
 
+	/**
+	 * queued_at/saas_job_id mirror Verlo_Brief::set_gen_status()'s fields of
+	 * the same name (see that docblock for the full "why") - preserved across
+	 * every transition of one cycle, reset only when a genuinely fresh queue()
+	 * starts a new one. set_status() itself never needs to know which state
+	 * transition is happening; queue() and the submit step decide that.
+	 */
 	protected static function set_status( $job_key, $state, $message = '', $meta = array() ) {
 		$current = self::get_status( $job_key );
 		update_option( self::status_option( $job_key ), array(
-			'state'      => $state,
-			'message'    => $message,
-			'updated_at' => time(),
-			'run_id'     => $current['run_id'],
-			'meta'       => $meta,
-			'context'    => $current['context'],
+			'state'       => $state,
+			'message'     => $message,
+			'updated_at'  => time(),
+			'run_id'      => $current['run_id'],
+			'meta'        => $meta,
+			'context'     => $current['context'],
+			'queued_at'   => $current['queued_at'],
+			'saas_job_id' => $current['saas_job_id'],
+		), 'no' );
+	}
+
+	public static function get_saas_job( $job_key ) {
+		return self::get_status( $job_key )['saas_job_id'];
+	}
+
+	public static function set_saas_job( $job_key, $saas_job_id ) {
+		$current = self::get_status( $job_key );
+		update_option( self::status_option( $job_key ), array(
+			'state'       => $current['state'],
+			'message'     => $current['message'],
+			'updated_at'  => $current['updated_at'],
+			'run_id'      => $current['run_id'],
+			'meta'        => $current['meta'],
+			'context'     => $current['context'],
+			'queued_at'   => $current['queued_at'],
+			'saas_job_id' => (string) $saas_job_id,
 		), 'no' );
 	}
 
@@ -87,12 +123,14 @@ class Verlo_Async_Job {
 
 		$run_id = 'job_' . sanitize_key( $job_key ) . '_' . substr( wp_generate_password( 8, false ), 0, 8 );
 		update_option( self::status_option( $job_key ), array(
-			'state'      => 'queued',
-			'message'    => 'Queued…',
-			'updated_at' => time(),
-			'run_id'     => $run_id,
-			'meta'       => array(),
-			'context'    => $context,
+			'state'       => 'queued',
+			'message'     => 'Queued…',
+			'updated_at'  => time(),
+			'run_id'      => $run_id,
+			'meta'        => array(),
+			'context'     => $context,
+			'queued_at'   => time(),
+			'saas_job_id' => '', // a fresh queue() always starts a genuinely new cycle
 		), 'no' );
 
 		$dispatched = self::dispatch_worker( $job_key );
@@ -184,9 +222,27 @@ class Verlo_Async_Job {
 		exit;
 	}
 
-	/** WP-Cron fallback worker. */
+	/**
+	 * WP-Cron fallback worker. Self-reschedules while a job is genuinely
+	 * still in flight (a SaaS job submitted and not done yet) - a one-shot
+	 * event, 20 seconds after queuing, isn't enough to see a job through to
+	 * completion by itself now that runners submit-then-poll rather than
+	 * blocking until their AI call finishes (see Verlo_Profile/
+	 * Verlo_Strategist/Verlo_Topical_Map's run_pending()). Capped so a
+	 * genuinely abandoned/errored job doesn't reschedule forever.
+	 */
 	public static function run_via_cron( $job_key ) {
-		self::run_pending( (string) $job_key, 'cron' );
+		$job_key = (string) $job_key;
+		$outcome = self::run_pending( $job_key, 'cron' );
+
+		if ( 'still_writing' === $outcome ) {
+			$status = self::get_status( $job_key );
+			$age    = $status['queued_at'] ? ( time() - (int) $status['queued_at'] ) : 0;
+			if ( $age < 10 * MINUTE_IN_SECONDS && ! wp_next_scheduled( 'verlo_cron_async', array( $job_key ) ) ) {
+				wp_schedule_single_event( time() + 10, 'verlo_cron_async', array( $job_key ) );
+				self::spawn_cron();
+			}
+		}
 	}
 
 	/**
@@ -252,7 +308,7 @@ class Verlo_Async_Job {
 		self::set_status( $job_key, 'running', 'Working (' . $source . ')…' );
 
 		try {
-			$result = call_user_func( $runner, $status['context'] );
+			$result = call_user_func( $runner, $job_key, $status['context'] );
 		} catch ( \Throwable $e ) {
 			if ( class_exists( 'Verlo_Log' ) ) {
 				Verlo_Log::error( 'async.fatal', 'Fatal during background job: ' . $e->getMessage(), array(
@@ -269,6 +325,20 @@ class Verlo_Async_Job {
 		self::release_lock( $job_key, $lock_token );
 
 		if ( is_wp_error( $result ) ) {
+			if ( 'verlo_still_writing' === $result->get_error_code() ) {
+				// Not an error - the runner either just submitted the SaaS job
+				// or checked on one already in flight and it isn't done yet.
+				// Status is already 'running' (set above); the next poll/cron/
+				// loopback cycle checks again. Same pattern as
+				// Verlo_Generator::run_pending() - see that one's docblock for
+				// the incident this replaced.
+				if ( class_exists( 'Verlo_Log' ) ) {
+					Verlo_Log::info( 'async.still_writing', $result->get_error_message(), array(
+						'job_key' => $job_key, 'source' => $source,
+					) );
+				}
+				return 'still_writing';
+			}
 			if ( class_exists( 'Verlo_Log' ) ) {
 				Verlo_Log::from_wp_error( 'async.error', $result, array( 'job_key' => $job_key, 'source' => $source ) );
 			}
@@ -313,8 +383,15 @@ class Verlo_Async_Job {
 		$age    = time() - (int) $status['updated_at'];
 		$delay  = class_exists( 'Verlo_Env' ) ? Verlo_Env::self_heal_delay() : 15;
 		$stalled = in_array( $status['state'], array( 'queued', 'running' ), true ) && $age >= $delay;
+		// Once a SaaS job is actually submitted, every check is a single fast
+		// GET, never a blocking wait - safe and cheap to try on every poll
+		// rather than waiting for $stalled, which exists for the different
+		// case of nothing having picked the job up at all. This is what
+		// actually drives queued -> submitted -> ... -> done forward while
+		// the tab stays open; see Verlo_Generator's identical reasoning.
+		$has_pending_job = ( 'running' === $status['state'] ) && '' !== $status['saas_job_id'];
 
-		if ( in_array( $status['state'], array( 'queued', 'running' ), true ) && ( $force || $stalled ) ) {
+		if ( in_array( $status['state'], array( 'queued', 'running' ), true ) && ( $force || $stalled || $has_pending_job ) ) {
 			self::run_pending( $job_key, 'browser' );
 			$status = self::get_status( $job_key );
 			$age    = time() - (int) $status['updated_at'];
