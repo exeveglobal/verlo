@@ -552,7 +552,7 @@ class Verlo_Brief_Admin {
 								$human = $mins > 0 ? ( $mins . 'm ' . $secs . 's' ) : ( $secs . 's' );
 								printf(
 									/* translators: %s: human-readable generation duration */
-									'<span style="margin-left:8px;color:#646970;font-size:12px;" title="' . esc_attr__( 'Actual server-side generation time', 'verlo' ) . '">' . esc_html__( 'generated in %s', 'verlo' ) . '</span>',
+									'<span style="margin-left:8px;color:#646970;font-size:12px;" title="' . esc_attr__( 'Time from clicking Generate to the draft being ready', 'verlo' ) . '">' . esc_html__( 'generated in %s', 'verlo' ) . '</span>',
 									esc_html( $human )
 								);
 							}

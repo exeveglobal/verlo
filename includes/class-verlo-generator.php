@@ -482,10 +482,24 @@ class Verlo_Generator {
 
 		$timing['total_s'] = round( microtime( true ) - $t_start, 1 );
 
+		// total_s is only this specific execution's own duration - accurate,
+		// but not what "generated in Xs" should mean to a user, and actively
+		// misleading whenever this ISN'T the execution that did the real
+		// work (see set_gen_status()'s queued_at docblock for why that
+		// happens: a stalled first attempt, then a second run that gets the
+		// first one's already-finished result back near-instantly via the
+		// SaaS side's idempotency key). wall_clock_s, timed from the user's
+		// actual click, is what the UI displays; total_s stays purely for
+		// the Logs tab's phase breakdown (AI write vs. images vs. block
+		// conversion), which IS about this execution specifically.
+		$queued_at     = Verlo_Brief::get_gen_status( $article_id )['queued_at'];
+		$wall_clock_s  = $queued_at ? round( microtime( true ) - $queued_at, 1 ) : $timing['total_s'];
+
 		$run_id = Verlo_Brief::get_run_id( $article_id );
 
 		// Persist the real server-side timing for the UI and diagnostics.
-		Verlo_Log::info( 'gen.timing', 'Article generated in ' . $timing['total_s'] . 's', array_merge( $timing, array(
+		Verlo_Log::info( 'gen.timing', 'Article generated in ' . $wall_clock_s . 's (this run took ' . $timing['total_s'] . 's)', array_merge( $timing, array(
+			'wall_clock_s'  => $wall_clock_s,
 			'run_id'        => $run_id,
 			'article_id'    => $article_id,
 			'keyword'       => $brief['keyword'],
@@ -510,7 +524,7 @@ class Verlo_Generator {
 				'title'       => (string) $title,
 				'pillar'      => (string) ( $brief['pillar'] ?? '' ),
 				'word_target' => (int) ( $brief['word_count'] ?? 0 ),
-				'gen_seconds' => (float) $timing['total_s'],
+				'gen_seconds' => (float) $wall_clock_s,
 				'run_id'      => $run_id,
 				'content'     => $final_content,
 			) );
@@ -527,7 +541,7 @@ class Verlo_Generator {
 			'status'     => 'draft',
 			'created_at' => isset( $brief['draft']['created_at'] ) ? (int) $brief['draft']['created_at'] : time(),
 			'updated_at' => time(),
-			'gen_seconds'=> isset( $timing['total_s'] ) ? (float) $timing['total_s'] : null,
+			'gen_seconds'=> $wall_clock_s,
 		);
 		Verlo_Brief::save( $article_id, $brief );
 

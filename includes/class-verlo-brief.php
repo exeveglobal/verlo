@@ -68,18 +68,39 @@ class Verlo_Brief {
 	public static function get_gen_status( $article_id ) {
 		$raw = get_option( self::gen_status_option( $article_id ), array() );
 		return wp_parse_args( is_array( $raw ) ? $raw : array(), array(
-			'state' => 'idle', 'message' => '', 'updated_at' => 0, 'run_id' => '',
+			'state' => 'idle', 'message' => '', 'updated_at' => 0, 'run_id' => '', 'queued_at' => 0,
 		) );
 	}
 
+	/**
+	 * queued_at marks when the user's click actually started this generation
+	 * cycle, and - unlike updated_at, which moves on every state change - is
+	 * preserved across queued -> running -> done/error so the true elapsed
+	 * time since that click can still be reported even if the run that
+	 * finally finishes isn't the same one that started it. This matters
+	 * because it usually isn't: if a first attempt stalls past its lock TTL
+	 * (host/network flakiness, not something this file controls) and a later
+	 * poll reclaims the lock, that second attempt's own internal timing
+	 * (do_generate_draft()'s $t_start) can legitimately be a few seconds -
+	 * the SaaS side's idempotency key means it gets back the FIRST attempt's
+	 * already-finished result instead of writing again, so nothing in that
+	 * second run's own duration reflects how long the user actually waited.
+	 * Confirmed live 2026-08-24: exactly this sequence displayed "generated
+	 * in 4.4s" for a request that had genuinely taken over 7 minutes.
+	 */
 	public static function set_gen_status( $article_id, $state, $message = '' ) {
-		// Preserve any existing run_id across status transitions.
 		$current = self::get_gen_status( $article_id );
+		$still_in_flight = in_array( $current['state'], array( 'queued', 'running' ), true );
 		update_option( self::gen_status_option( $article_id ), array(
 			'state'      => $state,
 			'message'    => $message,
 			'updated_at' => time(),
 			'run_id'     => $current['run_id'],
+			// A fresh 'queued' starts a new cycle's clock; anything else
+			// (including a fresh 'queued' arriving mid-cycle, which
+			// shouldn't happen but would otherwise erase a real start time)
+			// keeps the one already running.
+			'queued_at'  => ( 'queued' === $state && ! $still_in_flight ) ? time() : $current['queued_at'],
 		), 'no' );
 	}
 
@@ -98,6 +119,7 @@ class Verlo_Brief {
 			'message'    => $current['message'],
 			'updated_at' => $current['updated_at'],
 			'run_id'     => (string) $run_id,
+			'queued_at'  => $current['queued_at'],
 		), 'no' );
 	}
 
