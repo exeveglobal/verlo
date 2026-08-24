@@ -51,53 +51,123 @@ class Verlo_Topical_Map {
 	 * categories. Replaces any existing draft; never touches an approved map
 	 * unless $force.
 	 */
-	public static function generate( $force = false ) {
-		$map = self::get();
-		if ( 'approved' === $map['status'] && ! $force ) {
-			return new WP_Error( 'verlo_map_locked', 'The map is approved. Set it back to draft before regenerating.' );
+	/**
+	 * Submit-then-poll topical-map generation, same pattern as
+	 * Verlo_Generator::do_generate_draft() and Verlo_Strategist::do_build_brief()
+	 * (see either docblock for the full "why"). $job_key ('topical-map')
+	 * tracks the in-flight SaaS job id across invocations of one queued cycle
+	 * via Verlo_Async_Job::get_saas_job()/set_saas_job(). $context carries the
+	 * 'force' flag from the original request; reopen() (which flips the map
+	 * off 'approved' so the locked-map check below can pass) runs once, only
+	 * on the submit step, never repeated on later poll invocations of the
+	 * same cycle. Returns the saved map array|WP_Error, including
+	 * 'verlo_still_writing' while the job it just submitted or checked on
+	 * isn't done yet.
+	 */
+	protected static function do_generate_map( $job_key, $context ) {
+		$job_id = Verlo_Async_Job::get_saas_job( $job_key );
+
+		if ( ! $job_id ) {
+			if ( ! empty( $context['force'] ) ) { self::reopen(); }
+
+			$map = self::get();
+			if ( 'approved' === $map['status'] ) {
+				return new WP_Error( 'verlo_map_locked', 'The map is approved. Set it back to draft before regenerating.' );
+			}
+			if ( ! Verlo_Auth::is_connected() ) {
+				return new WP_Error( 'verlo_not_connected', 'Connect Verlo first under Strategy Profile → Verlo connection.' );
+			}
+			if ( ! Verlo_Profile::is_complete() ) {
+				return new WP_Error( 'verlo_profile_incomplete', 'Complete the Strategy Profile first (niche, audience, voice).' );
+			}
+
+			$snap = Verlo_Profile::site_snapshot( 40, 30 );
+			// No content guard here — a new site with zero posts is valid. The SaaS
+			// generates the content roadmap from the profile alone; empty covered_topics
+			// simply means nothing is pre-covered, which is correct for a fresh site.
+
+			$profile = Verlo_Profile::get();
+			$cats    = self::existing_categories();
+
+			$cat_names = array_map( function ( $c ) { return $c['name']; }, $cats );
+
+			$payload = array(
+				'profile' => array(
+					'niche'              => $profile['niche'],
+					'audience'           => $profile['audience'],
+					'voice'              => $profile['voice'],
+					'monetization_model' => $profile['monetization_model'],
+					'geo'                => $profile['geo'],
+					'language'           => $profile['language'],
+					'constraints'        => $profile['constraints'],
+				),
+				'knowledge_graph_summary' => array(
+					'covered_topics'      => $snap['titles'],
+					'site_titles'         => $snap['titles'],
+					'top_terms'           => $snap['terms'],
+					'existing_categories' => $cat_names,
+					'coverage_gaps'       => array(),
+					'total_posts'         => count( $snap['titles'] ),
+				),
+			);
+
+			$job_id = Verlo_SaaS_Client::request_job( 'topical-map', $payload );
+			if ( is_wp_error( $job_id ) ) {
+				$transient = in_array( $job_id->get_error_code(), array( 'verlo_timeout', 'verlo_transport' ), true );
+				if ( $transient && self::job_age_s( $job_key ) <= 10 * MINUTE_IN_SECONDS ) {
+					return new WP_Error( 'verlo_still_writing', 'Could not reach the Verlo server, will retry: ' . $job_id->get_error_message() );
+				}
+				return $job_id;
+			}
+
+			Verlo_Async_Job::set_saas_job( $job_key, $job_id );
+			return new WP_Error( 'verlo_still_writing', 'Topical map job submitted; waiting for the AI to finish.' );
 		}
-		if ( ! Verlo_Auth::is_connected() ) {
-			return new WP_Error( 'verlo_not_connected', 'Connect Verlo first under Strategy Profile → Verlo connection.' );
+
+		// A job is already in flight for this cycle. Check it once - never a
+		// blocking wait - and only proceed past here if it's genuinely done.
+		$poll = Verlo_SaaS_Client::poll_job( $job_id );
+		if ( is_wp_error( $poll ) ) {
+			if ( self::job_age_s( $job_key ) > 10 * MINUTE_IN_SECONDS ) { return $poll; }
+			return new WP_Error( 'verlo_still_writing', 'Status check failed, will retry: ' . $poll->get_error_message() );
 		}
-		if ( ! Verlo_Profile::is_complete() ) {
-			return new WP_Error( 'verlo_profile_incomplete', 'Complete the Strategy Profile first (niche, audience, voice).' );
+
+		$job_state = isset( $poll['status'] ) ? (string) $poll['status'] : 'unknown';
+		if ( 'error' === $job_state ) {
+			$msg = isset( $poll['message'] ) ? (string) $poll['message'] : 'Topical map generation failed.';
+			return new WP_Error( 'verlo_job_error', $msg );
+		}
+		if ( 'done' !== $job_state ) {
+			return new WP_Error( 'verlo_still_writing', 'Still waiting on the AI (status: ' . $job_state . ').' );
 		}
 
-		$snap = Verlo_Profile::site_snapshot( 40, 30 );
-		// No content guard here — a new site with zero posts is valid. The SaaS
-		// generates the content roadmap from the profile alone; empty covered_topics
-		// simply means nothing is pre-covered, which is correct for a fresh site.
+		$result = isset( $poll['result'] ) && is_array( $poll['result'] ) ? $poll['result'] : array();
+		$saved  = self::persist_map_result( $result );
+		if ( is_wp_error( $saved ) ) { return $saved; }
 
-		$profile = Verlo_Profile::get();
-		$cats    = self::existing_categories();
+		Verlo_Async_Job::set_saas_job( $job_key, '' ); // clear on genuine completion
+		return $saved;
+	}
 
-		$cat_names = array_map( function ( $c ) { return $c['name']; }, $cats );
+	/** Seconds since $job_key's current cycle was queued (see Verlo_Async_Job::queue()). */
+	protected static function job_age_s( $job_key ) {
+		$queued_at = Verlo_Async_Job::get_status( $job_key )['queued_at'];
+		return $queued_at ? ( time() - (int) $queued_at ) : 0;
+	}
 
-		$payload = array(
-			'profile' => array(
-				'niche'              => $profile['niche'],
-				'audience'           => $profile['audience'],
-				'voice'              => $profile['voice'],
-				'monetization_model' => $profile['monetization_model'],
-				'geo'                => $profile['geo'],
-				'language'           => $profile['language'],
-				'constraints'        => $profile['constraints'],
-			),
-			'knowledge_graph_summary' => array(
-				'covered_topics'      => $snap['titles'],
-				'site_titles'         => $snap['titles'],
-				'top_terms'           => $snap['terms'],
-				'existing_categories' => $cat_names,
-				'coverage_gaps'       => array(),
-				'total_posts'         => count( $snap['titles'] ),
-			),
-		);
-
-		$result = Verlo_SaaS_Client::run_job( 'topical-map', $payload, 90 );
-		if ( is_wp_error( $result ) ) { return $result; }
+	/**
+	 * Turn a completed SaaS topical-map result into a saved map. Split out of
+	 * the old single-request generate() so do_generate_map() can call it only
+	 * once the AI job is genuinely done, from whichever poll cycle that
+	 * happens to be.
+	 */
+	protected static function persist_map_result( $result ) {
 		if ( empty( $result['pillars'] ) || ! is_array( $result['pillars'] ) ) {
 			return new WP_Error( 'verlo_bad_map', 'AI did not return any pillars.' );
 		}
+
+		$map  = self::get();
+		$cats = self::existing_categories();
 
 		// Preserve IDs across regeneration: match new pillars/articles back to
 		// the map that existed before this call by normalised name/keyword, and
@@ -469,17 +539,22 @@ class Verlo_Topical_Map {
 
 	/**
 	 * Async-job runner for 'topical-map' (see Verlo_Async_Job). $context
-	 * carries the 'force' flag from the original request. Mirrors the
-	 * previous synchronous handler exactly: reopen() first when forced, then
-	 * call generate() with no argument (reopen() having already flipped the
-	 * map off 'approved' is what lets the no-force generate() proceed).
+	 * carries the 'force' flag from the original request, handed unchanged to
+	 * do_generate_map() (reopen() runs once there, only on the submit step).
+	 * Message reports wall_clock_s - real elapsed time since this cycle was
+	 * queued, not just this invocation's own duration (same reasoning as
+	 * Verlo_Strategist::run_pending(), see its docblock).
 	 */
-	public static function run_pending( $context = array() ) {
-		if ( ! empty( $context['force'] ) ) { self::reopen(); }
-		$res = self::generate();
+	public static function run_pending( $job_key, $context = array() ) {
+		$res = self::do_generate_map( $job_key, $context );
 		if ( is_wp_error( $res ) ) { return $res; }
 
-		$message = 'Draft map generated. Review the pillars below, edit as needed, then Approve.';
+		$wall_clock_s = self::job_age_s( $job_key );
+		if ( class_exists( 'Verlo_Log' ) ) {
+			Verlo_Log::info( 'topical_map.timing', 'Topical map generated in ' . $wall_clock_s . 's', array( 'wall_clock_s' => $wall_clock_s ) );
+		}
+
+		$message = 'Draft map generated in ' . $wall_clock_s . 's. Review the pillars below, edit as needed, then Approve.';
 		$billing = isset( $res['billing'] ) && is_array( $res['billing'] ) ? $res['billing'] : null;
 		if ( $billing ) {
 			if ( ! empty( $billing['was_charged'] ) ) {
@@ -491,6 +566,9 @@ class Verlo_Topical_Map {
 				$message  .= ' ' . $remaining . ' free regeneration' . ( 1 === $remaining ? '' : 's' ) . ' left this month.';
 			}
 		}
-		return $message;
+		return array(
+			'message' => $message,
+			'meta'    => array( 'wall_clock_s' => $wall_clock_s ),
+		);
 	}
 }

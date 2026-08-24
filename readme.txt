@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.29
+Stable tag: 1.1.30
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,9 @@ Yes, but a key is only active on one site at a time. Remove it from the current 
 Verlo doesn't expose which AI provider or model it uses in any part of the plugin, its output, or its support channels — this is intentional and not configurable.
 
 == Changelog ==
+
+= 1.1.30 =
+* Analyzing your site, generating a topical map, and generating a content brief no longer have any single step that stays running for the full length of the AI call — the same fix 1.1.29 made for article generation, extended to these three. Confirmed live: a brief that had genuinely finished on the server in 15 seconds was showing "2 sec" and a stuck-looking progress screen, because the step that first picks up a click can stall past its own timeout on some hosts with no way to recover cleanly. These now submit and check back in short steps, and the time shown once done is the real time from your click to the result, not a stalled attempt's fast, already-finished retry.
 
 = 1.1.29 =
 * Article generation no longer has any single step that stays running for the full length of the AI write (previously up to 3 minutes). That long-running step was the actual cause of the rare stalls behind 1.1.26–1.1.28 — some hosts silently kill a background process that runs that long, with no way for anything to log or recover from it cleanly. Generation now submits the job and checks back on it in a series of short steps instead, driven by the same progress indicator you already see — nothing changes about how you use it, this only removes the failure mode.
