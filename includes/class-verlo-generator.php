@@ -478,7 +478,7 @@ class Verlo_Generator {
 
 		$timing['total_s'] = round( microtime( true ) - $t_start, 1 );
 
-		$run_id = isset( $brief['gen']['run_id'] ) ? (string) $brief['gen']['run_id'] : '';
+		$run_id = Verlo_Brief::get_run_id( $article_id );
 
 		// Persist the real server-side timing for the UI and diagnostics.
 		Verlo_Log::info( 'gen.timing', 'Article generated in ' . $timing['total_s'] . 's', array_merge( $timing, array(

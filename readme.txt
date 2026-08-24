@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.25
+Stable tag: 1.1.26
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,9 @@ Yes, but a key is only active on one site at a time. Remove it from the current 
 Verlo doesn't expose which AI provider or model it uses in any part of the plugin, its output, or its support channels — this is intentional and not configurable.
 
 == Changelog ==
+
+= 1.1.26 =
+* Fixed article generation silently failing to ever complete: generation status for every article was stored inside one shared option holding every brief on the site, updated by reading, changing, and rewriting the whole thing on every status change. With three separate paths (background dispatch, the scheduled fallback, and the live-progress check) all doing this in close succession, a fresh "in progress" write could be silently overwritten by an older one moments later, leaving generation stuck showing a stale failure with nothing new ever actually starting. Each article's status now lives in its own separate, independent entry, so this can no longer happen.
 
 = 1.1.25 =
 * The background generation system (analyze, topical map, briefs, articles) now logs every reason a retry declines to run — a stale error blocking auto-retry, a lock still held by another worker, or a loopback request rejected for a missing/expired token. Previously these were silent: if none of the background/retry paths ever completed, the Logs page showed nothing after "queued", with no way to tell what actually happened. Support (and you) can now see exactly why from the Logs page, without needing server access.

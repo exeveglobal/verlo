@@ -35,6 +35,7 @@ class Verlo_Brief {
 		$all = self::all();
 		unset( $all[ (int) $article_id ] );
 		update_option( self::OPT, $all, 'no' );
+		delete_option( self::gen_status_option( $article_id ) );
 	}
 
 	public static function count() {
@@ -44,27 +45,42 @@ class Verlo_Brief {
 	/**
 	 * Generation status for an article's draft, used to drive the async UI.
 	 * Returns one of: 'idle' (no run in progress), 'queued', 'running',
-	 * 'done', 'error', plus a message/timestamp. Stored on the brief itself.
+	 * 'done', 'error', plus a message/timestamp/run_id.
+	 *
+	 * Stored in its OWN per-article option, NOT inside the shared 'verlo_briefs'
+	 * blob (all() / save() below). It used to live on the brief itself, but
+	 * that blob holds every brief on the site as one array under a single
+	 * option, and save() always does a full read-modify-write of the whole
+	 * thing. Status changes multiple times per generation (queued -> running
+	 * -> done/error) via three separate dispatch paths (loopback, WP-Cron,
+	 * poll-driven self-heal) that can genuinely run close together in time -
+	 * confirmed live 2026-08-24: a fresh 'queued' write was found reverted to
+	 * a 75-second-old 'error' by the time WP-Cron's fallback checked it, with
+	 * nothing in between ever setting it back to 'error' - a classic lost
+	 * update, not a code bug in any single write. A per-article option makes
+	 * each article's status update_option() call independent of every other
+	 * article's (and of the brief content's own, much less frequent, saves).
 	 */
+	protected static function gen_status_option( $article_id ) {
+		return '_verlo_gen_status_' . (int) $article_id;
+	}
+
 	public static function get_gen_status( $article_id ) {
-		$brief = self::get( $article_id );
-		if ( ! $brief || empty( $brief['gen'] ) || ! is_array( $brief['gen'] ) ) {
-			return array( 'state' => 'idle', 'message' => '', 'updated_at' => 0 );
-		}
-		return wp_parse_args( $brief['gen'], array( 'state' => 'idle', 'message' => '', 'updated_at' => 0 ) );
+		$raw = get_option( self::gen_status_option( $article_id ), array() );
+		return wp_parse_args( is_array( $raw ) ? $raw : array(), array(
+			'state' => 'idle', 'message' => '', 'updated_at' => 0, 'run_id' => '',
+		) );
 	}
 
 	public static function set_gen_status( $article_id, $state, $message = '' ) {
-		$brief = self::get( $article_id );
-		if ( ! $brief ) { return; }
-		$brief['gen'] = array(
+		// Preserve any existing run_id across status transitions.
+		$current = self::get_gen_status( $article_id );
+		update_option( self::gen_status_option( $article_id ), array(
 			'state'      => $state,
 			'message'    => $message,
 			'updated_at' => time(),
-			// Preserve any existing run_id across status transitions.
-			'run_id'     => isset( $brief['gen']['run_id'] ) ? $brief['gen']['run_id'] : '',
-		);
-		self::save( (int) $article_id, $brief );
+			'run_id'     => $current['run_id'],
+		), 'no' );
 	}
 
 	/**
@@ -72,18 +88,17 @@ class Verlo_Brief {
 	 * is queued; read by the worker/timing logs so the Logs tab can group them.
 	 */
 	public static function get_run_id( $article_id ) {
-		$brief = self::get( $article_id );
-		return ( $brief && ! empty( $brief['gen']['run_id'] ) ) ? (string) $brief['gen']['run_id'] : '';
+		return self::get_gen_status( $article_id )['run_id'];
 	}
 
 	public static function set_run_id( $article_id, $run_id ) {
-		$brief = self::get( $article_id );
-		if ( ! $brief ) { return; }
-		if ( ! isset( $brief['gen'] ) || ! is_array( $brief['gen'] ) ) {
-			$brief['gen'] = array( 'state' => 'idle', 'message' => '', 'updated_at' => time() );
-		}
-		$brief['gen']['run_id'] = (string) $run_id;
-		self::save( (int) $article_id, $brief );
+		$current = self::get_gen_status( $article_id );
+		update_option( self::gen_status_option( $article_id ), array(
+			'state'      => $current['state'],
+			'message'    => $current['message'],
+			'updated_at' => $current['updated_at'],
+			'run_id'     => (string) $run_id,
+		), 'no' );
 	}
 
 	/**
