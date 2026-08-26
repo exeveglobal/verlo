@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.32
+Stable tag: 1.1.33
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,9 @@ Yes, but a key is only active on one site at a time. Remove it from the current 
 Verlo doesn't expose which AI provider or model it uses in any part of the plugin, its output, or its support channels — this is intentional and not configurable.
 
 == Changelog ==
+
+= 1.1.33 =
+* Fixed generated articles occasionally showing WordPress's "This block contains unexpected or invalid content" warning on a comparison table. The table's HTML was always valid and rendered fine on the live page — the warning came from Gutenberg's native table block trying to reconstruct its own data from that HTML on every load and finding a mismatch. Tables now use a Custom HTML block instead, which has nothing to reconstruct, so there's nothing left to mismatch. Found and fixed the same day article generation started using real comparison tables more often.
 
 = 1.1.32 =
 * SEO title, meta description, and focus keyword are now written to whichever SEO plugin your site actually runs — Yoast, Rank Math, SEOPress, or The SEO Framework, detected automatically instead of only ever targeting Yoast and Rank Math. If you're on SEOPress or The SEO Framework, past drafts won't have this retroactively; regenerate or re-save them to pick it up.
