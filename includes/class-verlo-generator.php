@@ -1035,17 +1035,30 @@ class Verlo_Generator {
 	}
 
 	/**
-	 * Wrap a <table> element in Gutenberg's table block markup so it renders
-	 * as a native, editable table instead of falling through the default
-	 * case, which previously wrapped it in a <p> tag - invalid HTML that
-	 * Gutenberg flagged as content needing manual "attempt block recovery".
+	 * Wrap a <table> element as a Custom HTML block, not Gutenberg's native
+	 * wp:table - deliberately, not an oversight. wp:table isn't a raw-HTML
+	 * passthrough: core/table's head/body/foot attributes are derived FROM
+	 * the markup via query-selector sourcing (its block.json), and Gutenberg
+	 * re-validates by re-serializing those attributes back to HTML on every
+	 * load. Any subtle mismatch from AI-generated markup (whitespace, cell
+	 * structure) trips "Block contains unexpected or invalid content, Attempt
+	 * recovery" even though the HTML itself is perfectly valid and renders
+	 * fine - confirmed live 2026-08-26 on a real generated article (this
+	 * function previously used wp:table specifically to fix an EARLIER
+	 * "attempt recovery" cause - the default case's <p>-wrapping - without
+	 * knowing wp:table had its own separate one). wp:html has no attributes
+	 * to reconstruct, so there is nothing left to mismatch. Same
+	 * wp-block-table wrapper/classes so themes styling that class still
+	 * apply; the only real cost is the table isn't cell-click-editable in
+	 * the block editor, which doesn't matter for AI-generated content that's
+	 * reviewed as a whole before publishing anyway.
 	 */
 	protected static function table_to_block( $dom, $node ) {
 		$inner = trim( preg_replace( '/\s+/', ' ', self::inner_html( $dom, $node ) ) );
 		if ( '' === $inner ) { return ''; }
-		return "<!-- wp:table -->\n"
+		return "<!-- wp:html -->\n"
 			. "<figure class=\"wp-block-table\"><table class=\"wp-block-table\">{$inner}</table></figure>\n"
-			. "<!-- /wp:table -->\n\n";
+			. "<!-- /wp:html -->\n\n";
 	}
 
 	/**
