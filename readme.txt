@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.31
+Stable tag: 1.1.32
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,10 @@ Yes, but a key is only active on one site at a time. Remove it from the current 
 Verlo doesn't expose which AI provider or model it uses in any part of the plugin, its output, or its support channels — this is intentional and not configurable.
 
 == Changelog ==
+
+= 1.1.32 =
+* SEO title, meta description, and focus keyword are now written to whichever SEO plugin your site actually runs — Yoast, Rank Math, SEOPress, or The SEO Framework, detected automatically instead of only ever targeting Yoast and Rank Math. If you're on SEOPress or The SEO Framework, past drafts won't have this retroactively; regenerate or re-save them to pick it up.
+* The admin-only parts of the plugin (Content Briefs, Topical Map, Strategy Profile, and the other admin screens) no longer load on your site's actual pages — previously that code was read on every single front-end page view even though none of it could ever run there. No behavior change, just less for your server to do on every visitor's page load.
 
 = 1.1.31 =
 * Generated articles can now include an occasional pull quote for a standout insight (used sparingly, never more than one or two per article) — these needed a small fix here so they render as a real styled quote instead of silently collapsing into a plain paragraph. Requires the matching verlo-saas backend update (article structure, SEO scoring, and quality-check improvements).

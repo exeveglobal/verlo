@@ -892,8 +892,19 @@ class Verlo_Generator {
 	}
 
 	/**
-	 * Store SEO title / meta description / focus keyword for both Yoast and
-	 * Rank Math (harmless if either plugin is absent).
+	 * Store SEO title / meta description / focus keyword under whichever SEO
+	 * plugin(s) are actually active - detected, not assumed. Previously this
+	 * wrote unconditionally to Yoast's and Rank Math's postmeta keys, which
+	 * "worked" for those two specifically (writing meta an inactive plugin
+	 * never reads is harmless) but silently did nothing on a site running
+	 * SEOPress, The SEO Framework, or no SEO plugin at all - those meta
+	 * title/descriptions never reached a theme or search engine anywhere.
+	 *
+	 * AIOSEO is deliberately not covered: its current major version stores
+	 * this in its own custom DB table, not postmeta, and guessing at that
+	 * schema without a real install to verify against risks silently writing
+	 * nothing useful while looking like it worked - worse than the gap being
+	 * visible in the log below.
 	 */
 	protected static function apply_seo_meta( $post_id, $brief, $parsed ) {
 		$meta_desc = '' !== $parsed['meta'] ? $parsed['meta'] : $brief['angle'];
@@ -903,14 +914,43 @@ class Verlo_Generator {
 		$seo_title = self::clamp_text( $seo_title, 60 );
 		$meta_desc = self::clamp_text( $meta_desc, 155 );
 
-		// Yoast
-		update_post_meta( $post_id, '_yoast_wpseo_title', $seo_title );
-		update_post_meta( $post_id, '_yoast_wpseo_metadesc', $meta_desc );
-		update_post_meta( $post_id, '_yoast_wpseo_focuskw', $keyword );
-		// Rank Math
-		update_post_meta( $post_id, 'rank_math_title', $seo_title );
-		update_post_meta( $post_id, 'rank_math_description', $meta_desc );
-		update_post_meta( $post_id, 'rank_math_focus_keyword', $keyword );
+		$applied = array();
+
+		if ( defined( 'WPSEO_VERSION' ) ) {
+			update_post_meta( $post_id, '_yoast_wpseo_title', $seo_title );
+			update_post_meta( $post_id, '_yoast_wpseo_metadesc', $meta_desc );
+			update_post_meta( $post_id, '_yoast_wpseo_focuskw', $keyword );
+			$applied[] = 'yoast';
+		}
+
+		if ( defined( 'RANK_MATH_VERSION' ) || class_exists( 'RankMath' ) ) {
+			update_post_meta( $post_id, 'rank_math_title', $seo_title );
+			update_post_meta( $post_id, 'rank_math_description', $meta_desc );
+			update_post_meta( $post_id, 'rank_math_focus_keyword', $keyword );
+			$applied[] = 'rank_math';
+		}
+
+		if ( defined( 'SEOPRESS_VERSION' ) ) {
+			update_post_meta( $post_id, '_seopress_titles_title', $seo_title );
+			update_post_meta( $post_id, '_seopress_titles_desc', $meta_desc );
+			update_post_meta( $post_id, '_seopress_analysis_target_kw', $keyword );
+			$applied[] = 'seopress';
+		}
+
+		if ( defined( 'THE_SEO_FRAMEWORK_VERSION' ) || class_exists( 'The_SEO_Framework\Load' ) ) {
+			// TSF reuses the old Genesis meta keys for backward compatibility
+			// with themes/plugins built against Genesis - this is correct,
+			// documented TSF behaviour, not a mistake.
+			update_post_meta( $post_id, '_genesis_title', $seo_title );
+			update_post_meta( $post_id, '_genesis_description', $meta_desc );
+			$applied[] = 'the_seo_framework';
+		}
+
+		if ( empty( $applied ) && class_exists( 'Verlo_Log' ) ) {
+			Verlo_Log::info( 'gen.no_seo_plugin', 'No supported SEO plugin detected - the generated SEO title and meta description were not written anywhere a theme or search engine would read them.', array(
+				'post_id' => $post_id,
+			) );
+		}
 	}
 
 	/**
