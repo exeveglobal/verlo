@@ -970,6 +970,8 @@ class Verlo_Generator {
 				return self::list_to_block( $dom, $node, 'ol' === $tag );
 			case 'table':
 				return self::table_to_block( $dom, $node );
+			case 'blockquote':
+				return self::blockquote_to_block( $dom, $node );
 			default:
 				// Wrap anything else as a paragraph if it has content.
 				return '' !== $inner ? "<!-- wp:paragraph -->\n<p>{$inner}</p>\n<!-- /wp:paragraph -->\n\n" : '';
@@ -1004,6 +1006,28 @@ class Verlo_Generator {
 		return "<!-- wp:table -->\n"
 			. "<figure class=\"wp-block-table\"><table class=\"wp-block-table\">{$inner}</table></figure>\n"
 			. "<!-- /wp:table -->\n\n";
+	}
+
+	/**
+	 * Wrap a <blockquote> in Gutenberg's quote block markup - the sparing,
+	 * standalone-insight "pull quote" the article prompt is now allowed to
+	 * use (see verlo-saas's buildArticleSystemPrompt() PULL QUOTE rule),
+	 * kept distinct from a plain paragraph so it actually renders with the
+	 * theme's real quote styling instead of silently degrading into
+	 * unstyled text via the default case below.
+	 */
+	protected static function blockquote_to_block( $dom, $node ) {
+		$inner = trim( preg_replace( '/\s+/', ' ', self::inner_html( $dom, $node ) ) );
+		if ( '' === $inner ) { return ''; }
+		// The AI is instructed to wrap the quote text in its own <p>, but
+		// tolerate bare text too (Gutenberg's quote block still expects a
+		// <p> child either way).
+		if ( ! preg_match( '/<p[\s>]/i', $inner ) ) {
+			$inner = "<p>{$inner}</p>";
+		}
+		return "<!-- wp:quote -->\n"
+			. "<blockquote class=\"wp-block-quote\">{$inner}</blockquote>\n"
+			. "<!-- /wp:quote -->\n\n";
 	}
 
 	protected static function inner_html( $dom, $node ) {

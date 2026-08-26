@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.30
+Stable tag: 1.1.31
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,9 @@ Yes, but a key is only active on one site at a time. Remove it from the current 
 Verlo doesn't expose which AI provider or model it uses in any part of the plugin, its output, or its support channels — this is intentional and not configurable.
 
 == Changelog ==
+
+= 1.1.31 =
+* Generated articles can now include an occasional pull quote for a standout insight (used sparingly, never more than one or two per article) — these needed a small fix here so they render as a real styled quote instead of silently collapsing into a plain paragraph. Requires the matching verlo-saas backend update (article structure, SEO scoring, and quality-check improvements).
 
 = 1.1.30 =
 * Analyzing your site, generating a topical map, and generating a content brief no longer have any single step that stays running for the full length of the AI call — the same fix 1.1.29 made for article generation, extended to these three. Confirmed live: a brief that had genuinely finished on the server in 15 seconds was showing "2 sec" and a stuck-looking progress screen, because the step that first picks up a click can stall past its own timeout on some hosts with no way to recover cleanly. These now submit and check back in short steps, and the time shown once done is the real time from your click to the result, not a stalled attempt's fast, already-finished retry.
