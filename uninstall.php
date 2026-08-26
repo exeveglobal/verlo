@@ -36,11 +36,19 @@ $wpdb->query(
 	)
 );
 
-// Per-article generation locks, e.g. _verlo_lock_verlo_gen_lock_123.
+// Per-article generation locks (_verlo_lock_verlo_gen_lock_123), per-article
+// generation status (_verlo_gen_status_123, Verlo_Brief::gen_status_option() -
+// split out of the shared verlo_briefs option in 1.1.26 to stop concurrent
+// status writes for different articles clobbering each other), and
+// Verlo_Async_Job's site-level job locks (_verlo_async_lock_analyze) - three
+// different underscore-prefixes, none caught by the plain "verlo_" wildcard
+// above.
 $wpdb->query(
 	$wpdb->prepare(
-		"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
-		$wpdb->esc_like( '_verlo_lock_' ) . '%'
+		"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s OR option_name LIKE %s",
+		$wpdb->esc_like( '_verlo_lock_' ) . '%',
+		$wpdb->esc_like( '_verlo_gen_status_' ) . '%',
+		$wpdb->esc_like( '_verlo_async_lock_' ) . '%'
 	)
 );
 

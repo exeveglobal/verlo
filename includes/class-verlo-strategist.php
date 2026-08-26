@@ -63,7 +63,7 @@ class Verlo_Strategist {
 	 * Detect Content Brief rows where the linked post doesn't actually match
 	 * the keyword currently shown for that row. This happens when a brief's
 	 * article_id was reused by a later map regeneration before the id-stability
-	 * fix in Verlo_Topical_Map::generate() - the row displays the CURRENT map's
+	 * fix in Verlo_Topical_Map::persist_map_result() - the row displays the CURRENT map's
 	 * keyword, but the stored post link is whatever that recycled id pointed to
 	 * historically. Ground truth is the _verlo_keyword post meta, written once
 	 * at generation time and never touched again by later map changes.
@@ -164,9 +164,19 @@ class Verlo_Strategist {
 	}
 
 	/**
-	 * Build (and save) a brief for a planned article id. Returns brief|WP_Error.
+	 * Build (and save) a brief for a planned article id via submit-then-poll,
+	 * same pattern as Verlo_Generator::do_generate_draft() (see that method's
+	 * docblock for the full "why": a single request blocking for the length
+	 * of the AI call is exactly what some hosts silently kill - confirmed
+	 * live 2026-08-24 for this flow too, via a brief that had genuinely
+	 * finished server-side in 15s while the page it was queued from sat
+	 * stalled for over two minutes). $job_key ('brief-next') tracks the
+	 * in-flight SaaS job id across invocations of one queued cycle via
+	 * Verlo_Async_Job::get_saas_job()/set_saas_job(). Returns
+	 * article_id|WP_Error, including 'verlo_still_writing' while the job it
+	 * just submitted or checked on isn't done yet.
 	 */
-	public static function build_brief( $article_id ) {
+	protected static function do_build_brief( $job_key, $article_id ) {
 		if ( ! Verlo_Topical_Map::is_approved() ) {
 			return new WP_Error( 'verlo_map_not_approved', 'Approve the Topical Map before generating briefs.' );
 		}
@@ -182,37 +192,80 @@ class Verlo_Strategist {
 			return new WP_Error( 'verlo_no_article', 'That planned article is not in the approved map.' );
 		}
 
-		$profile    = Verlo_Profile::get();
+		$job_id = Verlo_Async_Job::get_saas_job( $job_key );
+
+		if ( ! $job_id ) {
+			$profile    = Verlo_Profile::get();
+			$candidates = self::internal_link_candidates( $article['keyword'] );
+			$payload    = array(
+				'profile' => array(
+					'niche'              => $profile['niche'],
+					'audience'           => $profile['audience'],
+					'voice'              => $profile['voice'],
+					'monetization_model' => $profile['monetization_model'],
+					'geo'                => $profile['geo'],
+					'language'           => $profile['language'],
+					'constraints'        => $profile['constraints'],
+				),
+				'article' => array(
+					'keyword'     => $article['keyword'],
+					'intent'      => $article['intent'],
+					'pillar'      => $article['pillar'],
+					'pillar_desc' => $article['pillar_desc'],
+				),
+				'internal_link_candidates' => $candidates,
+				'existing_articles'        => Verlo_Knowledge_Graph::get_titles_sample( 20 ),
+			);
+
+			$job_id = Verlo_SaaS_Client::request_job( 'brief', $payload );
+			if ( is_wp_error( $job_id ) ) {
+				// Only tolerate genuine transport-level failures as "try again
+				// next cycle" - business-logic errors surface right away. See
+				// Verlo_Generator::do_generate_draft() for the identical reasoning.
+				$transient = in_array( $job_id->get_error_code(), array( 'verlo_timeout', 'verlo_transport' ), true );
+				if ( $transient && self::job_age_s( $job_key ) <= 10 * MINUTE_IN_SECONDS ) {
+					return new WP_Error( 'verlo_still_writing', 'Could not reach the Verlo server, will retry: ' . $job_id->get_error_message() );
+				}
+				return $job_id;
+			}
+
+			Verlo_Async_Job::set_saas_job( $job_key, $job_id );
+			return new WP_Error( 'verlo_still_writing', 'Brief job submitted; waiting for the AI to finish.' );
+		}
+
+		// A job is already in flight for this cycle. Check it once - never a
+		// blocking wait - and only proceed past here if it's genuinely done.
+		$poll = Verlo_SaaS_Client::poll_job( $job_id );
+		if ( is_wp_error( $poll ) ) {
+			if ( self::job_age_s( $job_key ) > 10 * MINUTE_IN_SECONDS ) { return $poll; }
+			return new WP_Error( 'verlo_still_writing', 'Status check failed, will retry: ' . $poll->get_error_message() );
+		}
+
+		$job_state = isset( $poll['status'] ) ? (string) $poll['status'] : 'unknown';
+		if ( 'error' === $job_state ) {
+			$msg = isset( $poll['message'] ) ? (string) $poll['message'] : 'Brief generation failed.';
+			return new WP_Error( 'verlo_job_error', $msg );
+		}
+		if ( 'done' !== $job_state ) {
+			return new WP_Error( 'verlo_still_writing', 'Still waiting on the AI (status: ' . $job_state . ').' );
+		}
+
 		$candidates = self::internal_link_candidates( $article['keyword'] );
-
-		$existing_articles = Verlo_Knowledge_Graph::get_titles_sample( 20 );
-
-		$payload = array(
-			'profile' => array(
-				'niche'              => $profile['niche'],
-				'audience'           => $profile['audience'],
-				'voice'              => $profile['voice'],
-				'monetization_model' => $profile['monetization_model'],
-				'geo'                => $profile['geo'],
-				'language'           => $profile['language'],
-				'constraints'        => $profile['constraints'],
-			),
-			'article' => array(
-				'keyword'     => $article['keyword'],
-				'intent'      => $article['intent'],
-				'pillar'      => $article['pillar'],
-				'pillar_desc' => $article['pillar_desc'],
-			),
-			'internal_link_candidates' => $candidates,
-			'existing_articles'        => $existing_articles,
-		);
-
-		$res = Verlo_SaaS_Client::run_job( 'brief', $payload, 60 );
-		if ( is_wp_error( $res ) ) { return $res; }
-
-		$brief = self::sanitize_brief( $res, $article, $candidates );
+		$res        = isset( $poll['result'] ) && is_array( $poll['result'] ) ? $poll['result'] : array();
+		$brief      = self::sanitize_brief( $res, $article, $candidates );
 		$brief['meta'] = array( 'generated_at' => time(), 'updated_at' => time() );
-		return Verlo_Brief::save( $article_id, $brief );
+
+		$saved = Verlo_Brief::save( $article_id, $brief );
+		if ( is_wp_error( $saved ) ) { return $saved; }
+
+		Verlo_Async_Job::set_saas_job( $job_key, '' ); // clear on genuine completion
+		return $article_id;
+	}
+
+	/** Seconds since $job_key's current cycle was queued (see Verlo_Async_Job::queue()). */
+	protected static function job_age_s( $job_key ) {
+		$queued_at = Verlo_Async_Job::get_status( $job_key )['queued_at'];
+		return $queued_at ? ( time() - (int) $queued_at ) : 0;
 	}
 
 	/**
@@ -288,6 +341,49 @@ class Verlo_Strategist {
 			'planned'     => count( $planned ),
 			'with_brief'  => $with,
 			'without'     => count( $planned ) - $with,
+		);
+	}
+
+	/**
+	 * Async-job runner for 'brief-next' (see Verlo_Async_Job). $context
+	 * carries 'article_id', resolved once via pick_next() at queue time
+	 * (browser request, fast/local - no AI call) so the deferred run always
+	 * targets the same article even if the map changes before this fires.
+	 *
+	 * The completion message reports wall_clock_s - real elapsed time since
+	 * this cycle was queued (Verlo_Async_Job's queued_at), not just this
+	 * invocation's own (possibly near-instant, idempotent-replay) duration.
+	 * Same reasoning as Verlo_Generator's "generated in Xs" fix (1.1.28) -
+	 * without it, a stalled first attempt whose retry fetches an
+	 * already-finished result in a second or two reports that second or two
+	 * as the whole generation time, not the real time the user actually waited.
+	 */
+	public static function run_pending( $job_key, $context = array() ) {
+		$article_id = isset( $context['article_id'] ) ? (int) $context['article_id'] : 0;
+		if ( ! $article_id ) {
+			return new WP_Error( 'verlo_no_target', 'No planned article was selected to brief.' );
+		}
+
+		$res = self::do_build_brief( $job_key, $article_id );
+		if ( is_wp_error( $res ) ) { return $res; }
+
+		$article      = self::find_article( $article_id );
+		$wall_clock_s = self::job_age_s( $job_key );
+
+		if ( class_exists( 'Verlo_Log' ) ) {
+			Verlo_Log::info( 'brief.timing', 'Brief generated in ' . $wall_clock_s . 's', array(
+				'article_id'   => $article_id,
+				'wall_clock_s' => $wall_clock_s,
+			) );
+		}
+
+		// Optional prefix from a chained action (e.g. "Save & next" prepends
+		// a "Brief saved. " confirmation ahead of this brief's own message).
+		$prefix = isset( $context['prefix'] ) ? (string) $context['prefix'] : '';
+
+		return array(
+			'message' => $prefix . 'Brief generated for "' . ( $article ? $article['keyword'] : '' ) . '" in ' . $wall_clock_s . 's. Review below.',
+			'meta'    => array( 'article_id' => $article_id, 'wall_clock_s' => $wall_clock_s ),
 		);
 	}
 }

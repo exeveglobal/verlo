@@ -33,15 +33,71 @@ class Verlo_Profile_Admin {
 	public static function progress_overlay() {
 		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
 		if ( ! $screen || false === strpos( (string) $screen->id, 'verlo' ) ) { return; }
+
+		// All strings the inline script below needs, translated server-side and
+		// handed over as one JSON blob — __()/esc_html__() are PHP-only, so a
+		// raw JS string literal can't be wrapped directly; this is the
+		// equivalent of wp_localize_script() for a script that's templated
+		// inline rather than loaded from a registered handle.
+		$phases_js = wp_json_encode( array(
+			'analyze' => array(
+				__( 'Reading your site content…', 'verlo' ),
+				__( 'Spotting your core topics…', 'verlo' ),
+				__( 'Profiling your audience…', 'verlo' ),
+				__( 'Inferring tone and voice…', 'verlo' ),
+				__( 'Summarising your niche…', 'verlo' ),
+			),
+			'map' => array(
+				__( 'Reviewing your content profile…', 'verlo' ),
+				__( 'Clustering topics into pillars…', 'verlo' ),
+				__( 'Finding content gaps…', 'verlo' ),
+				__( 'Drafting planned articles…', 'verlo' ),
+				__( 'Checking what you already cover…', 'verlo' ),
+				__( 'Organising the roadmap…', 'verlo' ),
+			),
+			'brief' => array(
+				__( 'Reading the planned article…', 'verlo' ),
+				__( 'Studying search intent…', 'verlo' ),
+				__( 'Shaping the angle…', 'verlo' ),
+				__( 'Outlining the sections…', 'verlo' ),
+				__( 'Finding internal links…', 'verlo' ),
+				__( 'Planning the FAQ…', 'verlo' ),
+			),
+			'generic' => array(
+				__( 'Working…', 'verlo' ),
+				__( 'Thinking it through…', 'verlo' ),
+				__( 'Putting it together…', 'verlo' ),
+				__( 'Almost there…', 'verlo' ),
+			),
+		) );
+		$i18n_js = wp_json_encode( array(
+			'working'        => __( 'Working…', 'verlo' ),
+			/* translators: %s: elapsed time, e.g. "45s" or "2m 10s" */
+			'stillWorking'   => __( 'Still working (%s elapsed)…', 'verlo' ),
+			'done'           => __( 'Done.', 'verlo' ),
+			'somethingWrong' => __( 'Something went wrong.', 'verlo' ),
+			'stuckTitle'     => __( "This is taking longer than expected.", 'verlo' ),
+			'stuckBody'      => __( "The task may still finish in the background. Reload the page to check, or wait a bit longer.", 'verlo' ),
+			'reloadNow'      => __( 'Reload now', 'verlo' ),
+			'keepWaiting'    => __( 'Keep waiting', 'verlo' ),
+		) );
 		?>
 		<div id="verlo-overlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(255,255,255,.82);backdrop-filter:saturate(1) blur(1px);">
 			<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;min-width:300px;background:#fff;border:1px solid #e3e5e8;border-radius:12px;padding:26px 30px;box-shadow:0 8px 30px rgba(16,24,40,.12);">
 				<div class="verlo-spinner" style="width:34px;height:34px;margin:0 auto 14px;border:3px solid #e3e5e8;border-top-color:#2271b1;border-radius:50%;animation:verlo-spin .8s linear infinite;"></div>
-				<div id="verlo-overlay-msg" style="font-size:14px;font-weight:600;color:#1d2327;">Working…</div>
+				<div id="verlo-overlay-msg" style="font-size:14px;font-weight:600;color:#1d2327;"><?php esc_html_e( 'Working…', 'verlo' ); ?></div>
 				<div style="margin-top:14px;height:6px;width:220px;border-radius:999px;background:#eef0f2;overflow:hidden;">
 					<div style="height:100%;width:40%;border-radius:999px;background:#2271b1;animation:verlo-bar 1.1s ease-in-out infinite;"></div>
 				</div>
-				<div style="margin-top:10px;font-size:12px;color:#646970;">This can take a few seconds. Please keep this tab open.</div>
+				<div style="margin-top:10px;font-size:12px;color:#646970;"><?php esc_html_e( 'This can take a few seconds. Please keep this tab open.', 'verlo' ); ?></div>
+				<div id="verlo-overlay-stuck" style="display:none;margin-top:16px;padding-top:14px;border-top:1px solid #eef0f2;">
+					<div style="font-size:13px;font-weight:600;color:#9a6700;" id="verlo-overlay-stuck-title"></div>
+					<div style="margin-top:4px;font-size:12px;color:#646970;" id="verlo-overlay-stuck-body"></div>
+					<div style="margin-top:10px;display:flex;gap:10px;justify-content:center;align-items:center;">
+						<button type="button" id="verlo-overlay-reload" class="button button-small"></button>
+						<button type="button" id="verlo-overlay-keep-waiting" class="button-link" style="font-size:12px;"></button>
+					</div>
+				</div>
 			</div>
 		</div>
 		<style>
@@ -54,13 +110,10 @@ class Verlo_Profile_Admin {
 			var msgEl   = document.getElementById('verlo-overlay-msg');
 			if(!overlay) return;
 
+			var I18N = <?php echo $i18n_js; ?>;
+
 			// Rolling sub-messages so the wait feels like the algorithm is working.
-			var PHASES = {
-				analyze: ['Reading your site content…','Spotting your core topics…','Profiling your audience…','Inferring tone and voice…','Summarising your niche…'],
-				map: ['Reviewing your content profile…','Clustering topics into pillars…','Finding content gaps…','Drafting planned articles…','Checking what you already cover…','Organising the roadmap…'],
-				brief: ['Reading the planned article…','Studying search intent…','Shaping the angle…','Outlining the sections…','Finding internal links…','Planning the FAQ…'],
-				generic: ['Working…','Thinking it through…','Putting it together…','Almost there…']
-			};
+			var PHASES = <?php echo $phases_js; ?>;
 			var roll = null;
 			function startRolling(kind){
 				var list = PHASES[kind] || PHASES.generic;
@@ -79,7 +132,7 @@ class Verlo_Profile_Admin {
 					} else {
 						// Hold on an honest waiting state with a live timer rather
 						// than looping the same phrases.
-						msgEl.textContent = 'Still working (' + elapsed() + ' elapsed)…';
+						msgEl.textContent = I18N.stillWorking.replace('%s', elapsed());
 					}
 				}, 3000);
 			}
@@ -105,14 +158,122 @@ class Verlo_Profile_Admin {
 				if(!btn) return;
 				if(typeof form.checkValidity === 'function' && !form.checkValidity()) return;
 				msgEl.style.transition = 'opacity .2s';
-				msgEl.textContent = btn.getAttribute('data-verlo-progress') || 'Working…';
+				msgEl.textContent = btn.getAttribute('data-verlo-progress') || I18N.working;
 				startRolling(btn.getAttribute('data-verlo-phases') || 'generic');
 				overlay.style.display = 'block';
 			}, true);
-			window.addEventListener('pageshow', function(){
+			// Only reset on an actual back/forward-cache restore (a stale overlay
+			// from before the user navigated away) - pageshow ALSO fires on
+			// every normal fresh page load, including the one right below that
+			// intentionally turns the overlay back on to resume watching a
+			// queued job; without the event.persisted check this ran straight
+			// after that and hid it immediately, leaving the poll running
+			// invisibly until the page jumped straight to "done".
+			window.addEventListener('pageshow', function(e){
+				if(!e.persisted) return;
 				overlay.style.display = 'none';
 				if(roll){ clearInterval(roll); roll = null; }
 			});
+
+			// Resume-on-load: a redirect landed us here with a background job
+			// already queued/running (see Verlo_Async_Job) - the submit that
+			// started it happened on the PREVIOUS page load, so there is no
+			// submit event to catch here. Show the overlay immediately and poll
+			// for completion instead.
+			if (window.verloAsyncPoll) {
+				(function(){
+					var cfg = window.verloAsyncPoll;
+					msgEl.style.transition = 'opacity .2s';
+					msgEl.textContent = I18N.working;
+					startRolling(cfg.kind);
+					overlay.style.display = 'block';
+
+					var inflight = false, consecutiveFailures = 0, pollTimer = null;
+
+					// Safety net: however this got stuck (a host that kills a
+					// long-running self-heal request before it can report back,
+					// a genuinely orphaned job, anything else) the one thing
+					// that must never happen is a silent spinner with no way
+					// out. Verlo_Async_Job's own lock reclaims and retries an
+					// abandoned job on its own after LOCK_TTL (150s) - this
+					// fires a bit after that, so by the time it's shown, the
+					// system has already had its real chance to self-heal.
+					var stuckPanel = document.getElementById('verlo-overlay-stuck');
+					var stuckTimer = null;
+					if (stuckPanel) {
+						document.getElementById('verlo-overlay-stuck-title').textContent = I18N.stuckTitle;
+						document.getElementById('verlo-overlay-stuck-body').textContent = I18N.stuckBody;
+						document.getElementById('verlo-overlay-reload').textContent = I18N.reloadNow;
+						document.getElementById('verlo-overlay-keep-waiting').textContent = I18N.keepWaiting;
+						document.getElementById('verlo-overlay-reload').addEventListener('click', function(){
+							window.location.reload();
+						});
+						document.getElementById('verlo-overlay-keep-waiting').addEventListener('click', function(){
+							stuckPanel.style.display = 'none';
+							armStuckTimer(); // re-arm; shows again if it's STILL not done later
+						});
+					}
+					function armStuckTimer(){
+						if (stuckTimer) { clearTimeout(stuckTimer); }
+						stuckTimer = setTimeout(function(){
+							if (stuckPanel) { stuckPanel.style.display = 'block'; }
+						}, 170000);
+					}
+					armStuckTimer();
+
+					function stripAndReload(extra){
+						if (stuckTimer) { clearTimeout(stuckTimer); }
+						var u = new URL(cfg.baseUrl, window.location.href);
+						Object.keys(extra || {}).forEach(function(k){ u.searchParams.set(k, extra[k]); });
+						window.location.replace(u.toString());
+					}
+
+					function poll(force){
+						if (inflight && !force) return;
+						inflight = true;
+						var url = cfg.ajaxUrl + '?action=verlo_async_status&job_key=' + encodeURIComponent(cfg.jobKey)
+							+ '&nonce=' + encodeURIComponent(cfg.nonce) + (force ? '&force=1' : '');
+						fetch(url, {credentials:'same-origin'})
+							.then(function(r){ return r.json(); })
+							.then(function(res){
+								inflight = false;
+								if (!res || !res.success) return;
+								consecutiveFailures = 0;
+								var d = res.data || {};
+								if (d.state === 'done') {
+									clearInterval(pollTimer);
+									var done = { verlo_notice: d.message || I18N.done };
+									// brief-next's runner reports which article got the
+									// brief so we can land on its detail view, same as the
+									// old synchronous redirect_to_brief() did.
+									if (d.meta && d.meta.article_id) { done.verlo_brief = d.meta.article_id; }
+									stripAndReload(done);
+								} else if (d.state === 'error') {
+									clearInterval(pollTimer);
+									var extra = { verlo_notice: d.message || I18N.somethingWrong, verlo_error: 1 };
+									if (d.meta && d.meta.error_code === 'verlo_no_content') { extra.verlo_link_kg = 1; }
+									if (d.meta && d.meta.is_billing_error) { extra.verlo_link_billing = 1; }
+									stripAndReload(extra);
+								}
+							})
+							.catch(function(){
+								inflight = false;
+								consecutiveFailures++;
+								// A poll's self-heal run can itself take a while and get cut
+								// off by a proxy before responding - the job keeps running
+								// server-side either way, so just force the next poll to
+								// check fresh rather than treating this as fatal.
+								if (consecutiveFailures >= 4) { poll(true); }
+							});
+					}
+					poll(false);
+					pollTimer = setInterval(function(){ poll(false); }, 2500);
+					// If nothing's moved shortly after landing here, force this open
+					// tab to self-heal (run the job itself) rather than wait out the
+					// full loopback/cron window passively.
+					setTimeout(function(){ poll(true); }, 8000);
+				})();
+			}
 		})();
 		</script>
 		<?php
@@ -121,8 +282,8 @@ class Verlo_Profile_Admin {
 	public static function menu() {
 		add_submenu_page(
 			'verlo',
-			'Strategy Profile',
-			'Strategy Profile',
+			__( 'Strategy Profile', 'verlo' ),
+			__( 'Strategy Profile', 'verlo' ),
 			'manage_options',
 			'verlo-profile',
 			array( __CLASS__, 'render' )
@@ -181,12 +342,14 @@ class Verlo_Profile_Admin {
 		$complete  = Verlo_Profile::is_complete();
 		?>
 		<div class="wrap verlo-wrap">
-			<h1>Site Strategy Profile
-				<a href="<?php echo esc_url( VERLO_DOCS_URL ); ?>" target="_blank" rel="noopener noreferrer" class="page-title-action">Help &amp; Docs</a>
+			<h1><?php esc_html_e( 'Site Strategy Profile', 'verlo' ); ?>
+				<a href="<?php echo esc_url( VERLO_DOCS_URL ); ?>" target="_blank" rel="noopener noreferrer" class="page-title-action"><?php esc_html_e( 'Help & Docs', 'verlo' ); ?></a>
 			</h1>
-			<p style="margin-top:2px;color:#646970;">The one-time configuration that drives keyword, tone, intent, and structure decisions for this site.</p>
+			<p style="margin-top:2px;color:#646970;"><?php esc_html_e( 'The one-time configuration that drives keyword, tone, intent, and structure decisions for this site.', 'verlo' ); ?></p>
 
-			<?php if ( $notice && $is_error ) : ?>
+			<?php if ( '__working__' === $notice ) : ?>
+				<?php Verlo_Async_Job::render_poll_bootstrap( 'analyze', 'analyze', admin_url( 'admin.php?page=verlo-profile' ) ); ?>
+			<?php elseif ( $notice && $is_error ) : ?>
 				<!-- Deliberately not the standard thin-bordered .notice-error: this
 				     page also carries other plugins' promotional/status notices
 				     above it, and a genuine connection/action failure needs to
@@ -194,11 +357,11 @@ class Verlo_Profile_Admin {
 				<div class="verlo-alert verlo-alert-error" role="alert">
 					<span class="verlo-alert-icon" aria-hidden="true">⚠️</span>
 					<div class="verlo-alert-body">
-						<span class="verlo-alert-title">Something went wrong</span>
+						<span class="verlo-alert-title"><?php esc_html_e( 'Something went wrong', 'verlo' ); ?></span>
 						<p>
 							<?php echo esc_html( $notice ); ?>
 							<?php if ( $link_kg ) : ?>
-								&nbsp;<a href="<?php echo esc_url( $kg_url ); ?>">Open the Knowledge Graph page to build it now →</a>
+								&nbsp;<a href="<?php echo esc_url( $kg_url ); ?>"><?php esc_html_e( 'Open the Knowledge Graph page to build it now →', 'verlo' ); ?></a>
 							<?php endif; ?>
 						</p>
 					</div>
@@ -215,96 +378,128 @@ class Verlo_Profile_Admin {
 				<!-- Verlo connection card -->
 				<div class="verlo-card">
 					<h2>
-						Verlo connection
+						<?php esc_html_e( 'Verlo connection', 'verlo' ); ?>
 						<?php if ( $connected ) : ?>
-							<span class="verlo-badge ok">Connected</span>
-							<span class="verlo-badge info" style="font-size:11px;"><?php echo esc_html( ucfirst( Verlo_Auth::plan() ) ); ?> plan</span>
+							<span class="verlo-badge ok"><?php esc_html_e( 'Connected', 'verlo' ); ?></span>
+							<span class="verlo-badge info" style="font-size:11px;">
+								<?php
+								printf(
+									/* translators: %s: plan name, e.g. "Pro" */
+									esc_html__( '%s plan', 'verlo' ),
+									esc_html( ucfirst( Verlo_Auth::plan() ) )
+								);
+								?>
+							</span>
 						<?php else : ?>
-							<span class="verlo-badge off">Not connected</span>
+							<span class="verlo-badge off"><?php esc_html_e( 'Not connected', 'verlo' ); ?></span>
 						<?php endif; ?>
 					</h2>
 
 					<?php if ( $connected ) : ?>
-						<p class="verlo-sub">Your license is active. Disconnect to enter a different license key.</p>
+						<p class="verlo-sub"><?php esc_html_e( 'Your license is active. Disconnect to enter a different license key.', 'verlo' ); ?></p>
 						<p class="verlo-meta" style="margin-bottom:12px;">
-							Site ID: <code><?php echo esc_html( substr( Verlo_Auth::site_id(), 0, 8 ) . '…' ); ?></code>
+							<?php
+							printf(
+								/* translators: %s: first characters of the site id */
+								esc_html__( 'Site ID: %s', 'verlo' ),
+								'<code>' . esc_html( substr( Verlo_Auth::site_id(), 0, 8 ) . '…' ) . '</code>'
+							);
+							?>
 						</p>
 						<form method="post" action="<?php echo esc_url( $url ); ?>">
 							<input type="hidden" name="action" value="verlo_disconnect" />
 							<?php wp_nonce_field( 'verlo_disconnect' ); ?>
-							<button type="submit" class="button button-secondary" onclick="return confirm('Disconnect Verlo? Content generation will stop until you reconnect.');">Disconnect</button>
+							<button type="submit" class="button button-secondary" onclick="return confirm('<?php echo esc_js( __( 'Disconnect Verlo? Content generation will stop until you reconnect.', 'verlo' ) ); ?>');"><?php esc_html_e( 'Disconnect', 'verlo' ); ?></button>
 						</form>
 					<?php else : ?>
-						<div data-verlo-tour-target="connect">
-						<p class="verlo-sub">Connect your Verlo account — no need to find and paste a license key.</p>
+						<div data-verlo-tour-target="connect"<?php echo Verlo_Guided_Tour::target_id_attr( 'connect' ); ?>>
+						<p class="verlo-sub"><?php esc_html_e( 'Connect your Verlo account — no need to find and paste a license key.', 'verlo' ); ?></p>
 						<div class="verlo-actions" style="margin-bottom:16px;">
-							<a class="button button-primary button-hero" href="<?php echo esc_url( self::connect_start_url() ); ?>">Connect with Verlo</a>
+							<a class="button button-primary button-hero" href="<?php echo esc_url( self::connect_start_url() ); ?>"><?php esc_html_e( 'Connect with Verlo', 'verlo' ); ?></a>
 						</div>
-						<p class="verlo-sub" style="margin-top:0;">Or enter a license key manually:</p>
+						<p class="verlo-sub" style="margin-top:0;"><?php esc_html_e( 'Or enter a license key manually:', 'verlo' ); ?></p>
 						<form method="post" action="<?php echo esc_url( $url ); ?>">
 							<input type="hidden" name="action" value="verlo_connection" />
 							<?php wp_nonce_field( 'verlo_connection' ); ?>
 							<table class="form-table" role="presentation">
-								<tr class="verlo-field"><th>License key</th><td>
+								<tr class="verlo-field"><th><?php esc_html_e( 'License key', 'verlo' ); ?></th><td>
 									<input type="password" name="license_key" value="" autocomplete="off" placeholder="verlo-…" style="max-width:360px;" />
 								</td></tr>
 							</table>
 							<div class="verlo-actions">
-								<button type="submit" class="button button-primary" data-verlo-progress="Connecting to Verlo…">Connect</button>
+								<button type="submit" class="button button-primary" data-verlo-progress="<?php esc_attr_e( 'Connecting to Verlo…', 'verlo' ); ?>"><?php esc_html_e( 'Connect', 'verlo' ); ?></button>
 							</div>
 						</form>
 						</div>
+						<?php Verlo_Guided_Tour::render_target_callout( 'connect' ); ?>
 					<?php endif; ?>
 				</div>
 
 				<!-- Settings card -->
 				<div class="verlo-card">
-					<h2>Settings</h2>
-					<p class="verlo-sub">Image and link settings for generated articles.</p>
+					<h2><?php esc_html_e( 'Settings', 'verlo' ); ?></h2>
+					<p class="verlo-sub"><?php esc_html_e( 'Image and link settings for generated articles.', 'verlo' ); ?></p>
 					<form method="post" action="<?php echo esc_url( $url ); ?>">
 						<input type="hidden" name="action" value="verlo_connection" />
 						<input type="hidden" name="verlo_settings_only" value="1" />
 						<?php wp_nonce_field( 'verlo_connection' ); ?>
 						<table class="form-table" role="presentation">
-							<tr class="verlo-field"><th>Trusted outbound domains</th><td>
-								<textarea name="outbound_domains" rows="3" placeholder="one domain per line, e.g.&#10;akc.org&#10;mayoclinic.org"><?php echo esc_textarea( $s['outbound_domains'] ?? '' ); ?></textarea>
-								<p class="description">Niche-specific sites generated articles may link out to (in addition to Wikipedia and .gov/.edu). Leave blank for universal authorities only.</p>
+							<tr class="verlo-field"><th><?php esc_html_e( 'Trusted outbound domains', 'verlo' ); ?></th><td>
+								<textarea name="outbound_domains" rows="3" placeholder="<?php echo esc_attr( __( 'one domain per line, e.g.', 'verlo' ) . "\nakc.org\nmayoclinic.org" ); ?>"><?php echo esc_textarea( $s['outbound_domains'] ?? '' ); ?></textarea>
+								<p class="description"><?php esc_html_e( 'Niche-specific sites generated articles may link out to (in addition to Wikipedia and .gov/.edu). Leave blank for universal authorities only.', 'verlo' ); ?></p>
 							</td></tr>
-							<tr class="verlo-field"><th>In-body images (max)</th><td>
+							<tr class="verlo-field"><th><?php esc_html_e( 'In-body images (max)', 'verlo' ); ?></th><td>
 								<select name="inline_images">
 									<?php $ic = (int) ( $s['inline_images'] ?? 1 ); ?>
 									<?php foreach ( array( 0, 1, 2, 3 ) as $opt ) : ?>
-										<option value="<?php echo $opt; ?>" <?php selected( $ic, $opt ); ?>><?php echo 0 === $opt ? 'None (featured image only)' : 'Up to ' . $opt . ( 1 === $opt ? ' image' : ' images' ); ?></option>
+										<option value="<?php echo $opt; ?>" <?php selected( $ic, $opt ); ?>>
+											<?php
+											if ( 0 === $opt ) {
+												esc_html_e( 'None (featured image only)', 'verlo' );
+											} else {
+												printf(
+													/* translators: %d: number of images */
+													esc_html( _n( 'Up to %d image', 'Up to %d images', $opt, 'verlo' ) ),
+													$opt
+												);
+											}
+											?>
+										</option>
 									<?php endforeach; ?>
 								</select>
 							</td></tr>
 						</table>
 						<div class="verlo-actions">
-							<button type="submit" class="button">Save settings</button>
+							<button type="submit" class="button"><?php esc_html_e( 'Save settings', 'verlo' ); ?></button>
 						</div>
 					</form>
 				</div>
 
 				<!-- Site analysis card -->
 				<div class="verlo-card">
-					<h2>Site analysis</h2>
-					<p class="verlo-sub">Reads a low-token snapshot of your knowledge graph (sample titles + top vocabulary, never full posts) and proposes profile values for your review. One call. Nothing is final until you save.</p>
+					<h2><?php esc_html_e( 'Site analysis', 'verlo' ); ?></h2>
+					<p class="verlo-sub"><?php esc_html_e( 'Reads a low-token snapshot of your knowledge graph (sample titles + top vocabulary, never full posts) and proposes profile values for your review. One call. Nothing is final until you save.', 'verlo' ); ?></p>
 					<form method="post" action="<?php echo esc_url( $url ); ?>">
 						<input type="hidden" name="action" value="verlo_analyze" />
 						<?php wp_nonce_field( 'verlo_analyze' ); ?>
 						<div class="verlo-actions">
-							<button type="submit" class="button button-primary" data-verlo-tour-target="profile-analyze" data-verlo-progress="Analyzing your site with Verlo…" data-verlo-phases="analyze" <?php disabled( ! $connected ); ?>>Analyze my site with Verlo</button>
+							<button type="submit" class="button button-primary" data-verlo-tour-target="profile-analyze"<?php echo Verlo_Guided_Tour::target_id_attr( 'profile-analyze' ); ?> data-verlo-progress="<?php esc_attr_e( 'Analyzing your site with Verlo…', 'verlo' ); ?>" data-verlo-phases="analyze" <?php disabled( ! $connected ); ?>><?php esc_html_e( 'Analyze my site with Verlo', 'verlo' ); ?></button>
 							<?php if ( ! $connected ) : ?>
-								<span class="description">Connect your Verlo license first.</span>
+								<span class="description"><?php esc_html_e( 'Connect your Verlo license first.', 'verlo' ); ?></span>
 							<?php endif; ?>
 						</div>
+						<?php Verlo_Guided_Tour::render_target_callout( 'profile-analyze' ); ?>
 					</form>
 					<p class="verlo-meta">
 						<?php
 						if ( $p['meta']['inferred_at'] ) {
-							echo 'Last analysis: ' . esc_html( human_time_diff( (int) $p['meta']['inferred_at'], time() ) ) . ' ago.';
+							printf(
+								/* translators: %s: human-readable time since the last analysis */
+								esc_html__( 'Last analysis: %s ago.', 'verlo' ),
+								esc_html( human_time_diff( (int) $p['meta']['inferred_at'], time() ) )
+							);
 						} else {
-							echo 'No analysis run yet.';
+							esc_html_e( 'No analysis run yet.', 'verlo' );
 						}
 						?>
 					</p>
@@ -314,41 +509,45 @@ class Verlo_Profile_Admin {
 			<!-- Profile card -->
 			<div class="verlo-card verlo-card-full">
 				<h2>
-					Profile
+					<?php esc_html_e( 'Profile', 'verlo' ); ?>
 					<?php if ( $complete ) : ?>
-						<span class="verlo-badge ok">Complete</span>
+						<span class="verlo-badge ok"><?php esc_html_e( 'Complete', 'verlo' ); ?></span>
 					<?php else : ?>
-						<span class="verlo-badge warn">Incomplete: niche, audience &amp; voice required</span>
+						<span class="verlo-badge warn"><?php esc_html_e( 'Incomplete: niche, audience & voice required', 'verlo' ); ?></span>
 					<?php endif; ?>
 				</h2>
-				<p class="verlo-sub">Fill manually or accept/edit the Verlo proposal, then save.</p>
+				<p class="verlo-sub"><?php esc_html_e( 'Fill manually or accept/edit the Verlo proposal, then save.', 'verlo' ); ?></p>
 				<form method="post" action="<?php echo esc_url( $url ); ?>">
 					<input type="hidden" name="action" value="verlo_save_profile" />
 					<?php wp_nonce_field( 'verlo_save_profile' ); ?>
 					<table class="form-table" role="presentation">
-						<tr class="verlo-field"><th>Site name</th><td><input type="text" name="site_name" value="<?php echo esc_attr( $p['site_name'] ); ?>" /></td></tr>
-						<tr class="verlo-field"><th>Tagline</th><td><input type="text" name="tagline" value="<?php echo esc_attr( $p['tagline'] ); ?>" /></td></tr>
-						<tr class="verlo-field"><th>Niche</th><td><input type="text" name="niche" value="<?php echo esc_attr( $p['niche'] ); ?>" placeholder="what this site is about" /></td></tr>
-						<tr class="verlo-field"><th>Monetization model</th><td>
+						<tr class="verlo-field"><th><?php esc_html_e( 'Site name', 'verlo' ); ?></th><td><input type="text" name="site_name" value="<?php echo esc_attr( $p['site_name'] ); ?>" /></td></tr>
+						<tr class="verlo-field"><th><?php esc_html_e( 'Tagline', 'verlo' ); ?></th><td><input type="text" name="tagline" value="<?php echo esc_attr( $p['tagline'] ); ?>" /></td></tr>
+						<tr class="verlo-field"><th><?php esc_html_e( 'Niche', 'verlo' ); ?></th><td><input type="text" name="niche" value="<?php echo esc_attr( $p['niche'] ); ?>" placeholder="<?php esc_attr_e( 'what this site is about', 'verlo' ); ?>" /></td></tr>
+						<tr class="verlo-field"><th><?php esc_html_e( 'Monetization model', 'verlo' ); ?></th><td>
 							<select name="monetization_model">
 								<?php foreach ( $models as $key => $label ) : ?>
 									<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $p['monetization_model'], $key ); ?>><?php echo esc_html( $label ); ?></option>
 								<?php endforeach; ?>
 							</select>
-							<p class="description">The master switch. It changes keyword, tone, and volume strategy.</p>
+							<p class="description"><?php esc_html_e( 'The master switch. It changes keyword, tone, and volume strategy.', 'verlo' ); ?></p>
 						</td></tr>
-						<tr class="verlo-field"><th>Audience</th><td><textarea name="audience" rows="3" placeholder="who they are and what they need"><?php echo esc_textarea( $p['audience'] ); ?></textarea></td></tr>
-						<tr class="verlo-field"><th>Voice</th><td><textarea name="voice" rows="2" placeholder="tone and style"><?php echo esc_textarea( $p['voice'] ); ?></textarea></td></tr>
-						<tr class="verlo-field"><th>Language</th><td><input type="text" name="language" value="<?php echo esc_attr( $p['language'] ); ?>" style="max-width:120px;" /></td></tr>
-						<tr class="verlo-field"><th>Geo target</th><td><input type="text" name="geo" value="<?php echo esc_attr( $p['geo'] ); ?>" placeholder="e.g. US, UK, global" style="max-width:240px;" /></td></tr>
-						<tr class="verlo-field"><th>Constraints</th><td><textarea name="constraints" rows="2" placeholder="topics to avoid, compliance notes"><?php echo esc_textarea( $p['constraints'] ); ?></textarea></td></tr>
+						<tr class="verlo-field"><th><?php esc_html_e( 'Audience', 'verlo' ); ?></th><td><textarea name="audience" rows="3" placeholder="<?php esc_attr_e( 'who they are and what they need', 'verlo' ); ?>"><?php echo esc_textarea( $p['audience'] ); ?></textarea></td></tr>
+						<tr class="verlo-field"><th><?php esc_html_e( 'Voice', 'verlo' ); ?></th><td><textarea name="voice" rows="2" placeholder="<?php esc_attr_e( 'tone and style', 'verlo' ); ?>"><?php echo esc_textarea( $p['voice'] ); ?></textarea></td></tr>
+						<tr class="verlo-field"><th><?php esc_html_e( 'Language', 'verlo' ); ?></th><td><input type="text" name="language" value="<?php echo esc_attr( $p['language'] ); ?>" style="max-width:120px;" /></td></tr>
+						<tr class="verlo-field"><th><?php esc_html_e( 'Geo target', 'verlo' ); ?></th><td><input type="text" name="geo" value="<?php echo esc_attr( $p['geo'] ); ?>" placeholder="<?php esc_attr_e( 'e.g. US, UK, global', 'verlo' ); ?>" style="max-width:240px;" /></td></tr>
+						<tr class="verlo-field"><th><?php esc_html_e( 'Constraints', 'verlo' ); ?></th><td><textarea name="constraints" rows="2" placeholder="<?php esc_attr_e( 'topics to avoid, compliance notes', 'verlo' ); ?>"><?php echo esc_textarea( $p['constraints'] ); ?></textarea></td></tr>
 					</table>
-					<div class="verlo-actions"><?php submit_button( 'Save profile', 'primary', 'submit', false ); ?></div>
+					<div class="verlo-actions"><?php submit_button( __( 'Save profile', 'verlo' ), 'primary', 'submit', false ); ?></div>
 				</form>
 				<p class="verlo-meta">
 					<?php
 					if ( $p['meta']['updated_at'] ) {
-						echo 'Last saved ' . esc_html( human_time_diff( (int) $p['meta']['updated_at'], time() ) ) . ' ago.';
+						printf(
+							/* translators: %s: human-readable time since the profile was last saved */
+							esc_html__( 'Last saved %s ago.', 'verlo' ),
+							esc_html( human_time_diff( (int) $p['meta']['updated_at'], time() ) )
+						);
 					}
 					?>
 				</p>
@@ -356,18 +555,18 @@ class Verlo_Profile_Admin {
 
 			<!-- Export / import card -->
 			<div class="verlo-card verlo-card-full">
-				<h2>Export / Import</h2>
-				<p class="verlo-sub">Reuse this profile as a template on your other sites.</p>
+				<h2><?php esc_html_e( 'Export / Import', 'verlo' ); ?></h2>
+				<p class="verlo-sub"><?php esc_html_e( 'Reuse this profile as a template on your other sites.', 'verlo' ); ?></p>
 				<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline;">
 					<input type="hidden" name="action" value="verlo_export_profile" />
 					<?php wp_nonce_field( 'verlo_export_profile' ); ?>
-					<?php submit_button( 'Download profile JSON', 'secondary', 'submit', false ); ?>
+					<?php submit_button( __( 'Download profile JSON', 'verlo' ), 'secondary', 'submit', false ); ?>
 				</form>
 				<form method="post" action="<?php echo esc_url( $url ); ?>" style="margin-top:12px;">
 					<input type="hidden" name="action" value="verlo_import_profile" />
 					<?php wp_nonce_field( 'verlo_import_profile' ); ?>
-					<textarea name="profile_json" rows="5" class="large-text code" placeholder="paste profile JSON here"></textarea>
-					<div class="verlo-actions"><?php submit_button( 'Import profile JSON', 'secondary', 'submit', false ); ?></div>
+					<textarea name="profile_json" rows="5" class="large-text code" placeholder="<?php esc_attr_e( 'paste profile JSON here', 'verlo' ); ?>"></textarea>
+					<div class="verlo-actions"><?php submit_button( __( 'Import profile JSON', 'verlo' ), 'secondary', 'submit', false ); ?></div>
 				</form>
 			</div>
 		</div>
@@ -392,20 +591,20 @@ class Verlo_Profile_Admin {
 			$s['outbound_domains'] = $domains;
 			$s['inline_images']    = $inline;
 			update_option( VERLO_OPT_SETTINGS, $s, 'no' );
-			self::redirect( 'Settings saved.' );
+			self::redirect( __( 'Settings saved.', 'verlo' ) );
 		}
 
 		// License-key connect.
 		$license_key = sanitize_text_field( wp_unslash( $_POST['license_key'] ?? '' ) );
 		if ( '' === $license_key ) {
-			self::redirect( 'Enter a license key first.', true );
+			self::redirect( __( 'Enter a license key first.', 'verlo' ), true );
 		}
 		// Verlo keys always look like VERLO-XXXXXX-XXXXXX-XXXXXX-XXXXXX (see
 		// generateLicenseKey() in verlo-saas). Reject anything else locally —
 		// no reason to spend a network round trip telling someone their pasted
 		// value isn't a key at all.
 		if ( ! preg_match( '/^VERLO(-[0-9A-F]{6}){4}$/i', $license_key ) ) {
-			self::redirect( 'That doesn\'t look like a Verlo license key. Copy it from your dashboard\'s License Keys page — it looks like VERLO-XXXXXX-XXXXXX-XXXXXX-XXXXXX.', true );
+			self::redirect( __( 'That doesn\'t look like a Verlo license key. Copy it from your dashboard\'s License Keys page — it looks like VERLO-XXXXXX-XXXXXX-XXXXXX-XXXXXX.', 'verlo' ), true );
 		}
 
 		$s = verlo_get_settings();
@@ -415,18 +614,18 @@ class Verlo_Profile_Admin {
 
 		$res = Verlo_Auth::verify( $license_key );
 		if ( is_wp_error( $res ) ) {
-			self::redirect( 'Connection failed: ' . $res->get_error_message(), true );
+			self::redirect( sprintf( /* translators: %s: error message */ __( 'Connection failed: %s', 'verlo' ), $res->get_error_message() ), true );
 		}
 
 		$plan = isset( $res['plan'] ) ? ucfirst( (string) $res['plan'] ) : 'active';
-		self::redirect( 'Connected! Verlo is active (' . $plan . ' plan).' );
+		self::redirect( sprintf( /* translators: %s: plan name */ __( 'Connected! Verlo is active (%s plan).', 'verlo' ), $plan ) );
 	}
 
 	/** Disconnect and clear all stored auth data. */
 	public static function handle_disconnect() {
 		self::guard( 'verlo_disconnect' );
 		Verlo_Auth::disconnect();
-		self::redirect( 'Verlo disconnected.' );
+		self::redirect( __( 'Verlo disconnected.', 'verlo' ) );
 	}
 
 	/** Nonce-signed link that starts the "Connect with Verlo" redirect flow. */
@@ -443,7 +642,7 @@ class Verlo_Profile_Admin {
 	 */
 	public static function handle_connect_start() {
 		if ( ! current_user_can( 'manage_options' ) || ! check_admin_referer( 'verlo_connect_start' ) ) {
-			wp_die( 'Permission denied.' );
+			wp_die( esc_html__( 'Permission denied.', 'verlo' ) );
 		}
 
 		// wp_nonce_url() runs its result through esc_html(), which turns the
@@ -481,7 +680,7 @@ class Verlo_Profile_Admin {
 	 */
 	public static function handle_connect_complete() {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( 'Permission denied.' );
+			wp_die( esc_html__( 'Permission denied.', 'verlo' ) );
 		}
 		// A plain check_admin_referer() here would wp_die() on a bad/expired
 		// nonce with WordPress's generic "The link you followed has expired"
@@ -493,39 +692,46 @@ class Verlo_Profile_Admin {
 		// send the user back to our own screen with a clear next step instead.
 		$nonce = sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ?? '' ) );
 		if ( ! wp_verify_nonce( $nonce, 'verlo_connect_complete' ) ) {
-			self::redirect( 'Connection failed: this link has expired. Click "Connect with Verlo" again to retry.', true );
+			self::redirect( __( 'Connection failed: this link has expired. Click "Connect with Verlo" again to retry.', 'verlo' ), true );
 		}
 
 		$token = sanitize_text_field( wp_unslash( $_GET['token'] ?? '' ) );
 		if ( '' === $token ) {
-			self::redirect( 'Connection failed: no token received.', true );
+			self::redirect( __( 'Connection failed: no token received.', 'verlo' ), true );
 		}
 
 		$res = Verlo_Auth::connect_via_token( $token );
 		if ( is_wp_error( $res ) ) {
-			self::redirect( 'Connection failed: ' . $res->get_error_message(), true );
+			self::redirect( sprintf( /* translators: %s: error message */ __( 'Connection failed: %s', 'verlo' ), $res->get_error_message() ), true );
 		}
 
 		$plan = isset( $res['plan'] ) ? ucfirst( (string) $res['plan'] ) : 'active';
-		self::redirect( 'Connected! Verlo is active (' . $plan . ' plan).' );
+		self::redirect( sprintf( /* translators: %s: plan name */ __( 'Connected! Verlo is active (%s plan).', 'verlo' ), $plan ) );
 	}
 
 	public static function handle_save_profile() {
 		self::guard( 'verlo_save_profile' );
 		Verlo_Profile::save( wp_unslash( $_POST ), 'manual' );
-		self::redirect( 'Profile saved.' );
+		self::redirect( __( 'Profile saved.', 'verlo' ) );
 	}
 
+	/**
+	 * Analysis calls the Verlo SaaS and can take up to ~60s
+	 * (Verlo_SaaS_Client::run_job()'s timeout) - long enough that hosts with
+	 * a shorter proxy/PHP execution limit than that (common on shared
+	 * hosting) return a 503 before it finishes, even though the analysis
+	 * itself would have succeeded. Queuing through Verlo_Async_Job instead
+	 * returns control to the browser immediately; the page shows a live
+	 * progress state and polls until the real result is ready (see
+	 * progress_overlay()'s resume-on-load poller and Verlo_Profile::run_pending()).
+	 */
 	public static function handle_analyze() {
 		self::guard( 'verlo_analyze' );
-		$proposed = Verlo_Profile::infer();
-		if ( is_wp_error( $proposed ) ) {
-			$msg     = 'Analysis failed: ' . $proposed->get_error_message();
-			$link_kg = ( 'verlo_no_content' === $proposed->get_error_code() );
-			self::redirect( $msg, true, $link_kg );
+		if ( ! Verlo_Auth::is_connected() ) {
+			self::redirect( __( 'Connect Verlo first under Strategy Profile → Verlo connection.', 'verlo' ), true );
 		}
-		Verlo_Profile::save( $proposed, 'inferred' );
-		self::redirect( 'Verlo proposed values from your content. Review the fields below and Save profile.' );
+		Verlo_Async_Job::queue( 'analyze' );
+		self::redirect( '__working__' );
 	}
 
 	public static function handle_export() {
@@ -543,14 +749,14 @@ class Verlo_Profile_Admin {
 		self::guard( 'verlo_import_profile' );
 		$res = Verlo_Profile::import_json( wp_unslash( $_POST['profile_json'] ?? '' ) );
 		if ( is_wp_error( $res ) ) {
-			self::redirect( 'Import failed: ' . $res->get_error_message(), true );
+			self::redirect( sprintf( /* translators: %s: error message */ __( 'Import failed: %s', 'verlo' ), $res->get_error_message() ), true );
 		}
-		self::redirect( 'Profile imported.' );
+		self::redirect( __( 'Profile imported.', 'verlo' ) );
 	}
 
 	protected static function guard( $nonce ) {
 		if ( ! current_user_can( 'manage_options' ) || ! check_admin_referer( $nonce ) ) {
-			wp_die( 'Permission denied.' );
+			wp_die( esc_html__( 'Permission denied.', 'verlo' ) );
 		}
 	}
 

@@ -123,9 +123,28 @@ class Verlo_Generator {
 	 * WP-Cron fallback worker. Runs if the article is still pending (the loopback
 	 * worker didn't complete it). Uses the lock so it never races a live worker,
 	 * but treats a STALE lock (held by a worker that died) as reclaimable.
+	 *
+	 * Self-reschedules while genuinely still in progress: a single one-shot
+	 * cron event, 20 seconds after queuing, was enough back when one
+	 * invocation could see a generation all the way through by itself. Now
+	 * that generation is submit-then-poll (see do_generate_draft()), a job
+	 * can legitimately still be mid-flight well past that — this keeps
+	 * checking every few seconds until it's actually done, so a browser tab
+	 * being closed doesn't strand it, capped so a genuinely abandoned/errored
+	 * job doesn't reschedule forever.
 	 */
 	public static function run_via_cron( $article_id ) {
-		self::run_pending( (int) $article_id, 'cron' );
+		$article_id = (int) $article_id;
+		$outcome    = self::run_pending( $article_id, 'cron' );
+
+		if ( 'still_writing' === $outcome ) {
+			$status = Verlo_Brief::get_gen_status( $article_id );
+			$age    = $status['queued_at'] ? ( time() - (int) $status['queued_at'] ) : 0;
+			if ( $age < 10 * MINUTE_IN_SECONDS && ! wp_next_scheduled( 'verlo_cron_generate', array( $article_id ) ) ) {
+				wp_schedule_single_event( time() + 10, 'verlo_cron_generate', array( $article_id ) );
+				self::spawn_cron();
+			}
+		}
 	}
 
 	/**
@@ -135,7 +154,12 @@ class Verlo_Generator {
 	public static function run_pending( $article_id, $source ) {
 		$article_id = (int) $article_id;
 		$brief      = Verlo_Brief::get( $article_id );
-		if ( ! $brief ) { return 'no_brief'; }
+		if ( ! $brief ) {
+			Verlo_Log::warn( 'gen.no_brief', 'Background worker found no brief for this article', array(
+				'article_id' => $article_id, 'source' => $source,
+			) );
+			return 'no_brief';
+		}
 
 		// Already finished?
 		if ( ! empty( $brief['draft']['post_id'] ) && get_post( (int) $brief['draft']['post_id'] ) ) {
@@ -147,7 +171,24 @@ class Verlo_Generator {
 		}
 
 		$status = Verlo_Brief::get_gen_status( $article_id );
-		if ( 'error' === $status['state'] ) { return 'errored'; }
+		// This early return is the single most important line in this file for
+		// diagnosing a "nothing happens" report: it means SOME earlier attempt
+		// already failed and left status 'error', and every subsequent
+		// loopback/cron/self-heal call is declining to auto-retry a failed job
+		// (only a fresh user-initiated queue_draft() call resets status). If
+		// this fires immediately after a fresh "Generate" click rather than
+		// after a real wait, queue_draft()'s set_gen_status('queued', ...)
+		// isn't winning its race against a fast loopback/self-heal call — that
+		// race, not this line itself, is the bug to chase next.
+		if ( 'error' === $status['state'] ) {
+			Verlo_Log::info( 'gen.declined_stale_error', 'Declined to auto-retry: status was already \'error\'', array(
+				'article_id'      => $article_id,
+				'source'          => $source,
+				'existing_message' => $status['message'],
+				'status_age_s'    => time() - (int) $status['updated_at'],
+			) );
+			return 'errored';
+		}
 
 		// Only defer to "another worker" if the generation lock is actually held
 		// (a request is genuinely mid-API-call). If the lock is free, no worker
@@ -155,6 +196,13 @@ class Verlo_Generator {
 		// that has since died — so we take over now rather than waiting out a
 		// fixed timeout. The lock itself prevents any duplicate paid API call.
 		if ( self::lock_held( 'verlo_gen_lock_' . $article_id ) ) {
+			$lock_raw = (string) get_option( '_verlo_lock_verlo_gen_lock_' . $article_id, '' );
+			Verlo_Log::warn( 'gen.locked_busy', 'Declined to run: generation lock is held by another worker', array(
+				'article_id'   => $article_id,
+				'source'       => $source,
+				'lock_age_s'   => $lock_raw ? ( time() - (int) strtok( $lock_raw, '|' ) ) : null,
+				'lock_ttl_s'   => self::LOCK_TTL,
+			) );
 			return 'locked_busy';
 		}
 
@@ -184,7 +232,21 @@ class Verlo_Generator {
 		}
 		if ( is_wp_error( $res ) ) {
 			if ( 'verlo_in_progress' === $res->get_error_code() ) {
+				Verlo_Log::info( 'gen.in_progress', 'generate_draft() found its own lock already held; leaving status as running for the next poll', array(
+					'run_id' => $run_id, 'article_id' => $article_id, 'source' => $source,
+				) );
 				return 'in_progress';
+			}
+			if ( 'verlo_still_writing' === $res->get_error_code() ) {
+				// Not an error - do_generate_draft() either just submitted the SaaS
+				// job or checked on one already in flight and it isn't done yet.
+				// Status is already 'running' (set above); the next poll/cron/
+				// loopback cycle checks again. See that function's docblock for
+				// why this exists as a distinct signal instead of blocking here.
+				Verlo_Log::info( 'gen.still_writing', $res->get_error_message(), array(
+					'run_id' => $run_id, 'article_id' => $article_id, 'source' => $source,
+				) );
+				return 'still_writing';
 			}
 			Verlo_Log::from_wp_error( 'gen.error', $res, array( 'run_id' => $run_id, 'article_id' => $article_id, 'source' => $source ) );
 			Verlo_Brief::set_gen_status( $article_id, 'error', $res->get_error_message() );
@@ -210,26 +272,48 @@ class Verlo_Generator {
 		$expected   = get_transient( 'verlo_gen_token_' . $article_id );
 
 		if ( ! $article_id || ! $expected || ! hash_equals( (string) $expected, $token ) ) {
+			// A rejected loopback call is silent by default from the browser's
+			// point of view (the original request already returned and moved
+			// on) - if this is the ONLY thing that ever runs for a queued job
+			// (WP-Cron blocked, self-heal not yet due), the job just looks
+			// stuck with zero explanation anywhere. Log it so that trail
+			// exists: a missing/expired transient usually means the loopback
+			// arrived unusually late (host under load, or a security plugin
+			// delaying/duplicating the request), not a code bug.
+			Verlo_Log::warn( 'gen.loopback_rejected', 'Loopback worker request rejected: missing/expired/mismatched token', array(
+				'article_id'      => $article_id,
+				'had_token'       => '' !== $token,
+				'transient_found' => false !== $expected,
+			) );
 			status_header( 403 );
 			exit;
 		}
 		delete_transient( 'verlo_gen_token_' . $article_id );
 
-		Verlo_Brief::set_gen_status( $article_id, 'running', 'Writing the article…' );
-
-		$res = self::generate_draft( $article_id );
-		if ( is_wp_error( $res ) ) {
-			Verlo_Brief::set_gen_status( $article_id, 'error', $res->get_error_message() );
-		} else {
-			Verlo_Brief::set_gen_status( $article_id, 'done', 'Draft article created.' );
-		}
+		// This used to duplicate run_pending()'s work inline (set 'running',
+		// call generate_draft(), set 'done'/'error') instead of calling it -
+		// which meant the loopback, the actual FIRST and fastest of the three
+		// dispatch paths to reach a real article on every attempt, skipped
+		// run_pending()'s lock check (a second concurrent caller couldn't be
+		// deferred, only generate_draft()'s OWN inner lock caught that) and,
+		// critically, never logged anything on failure. Confirmed live
+		// 2026-08-24: this is why every "gen.declined_stale_error" trace from
+		// the cron fallback found a real, fresh error with no explanation
+		// anywhere - the loopback had already failed here, silently, every
+		// single time, moments before cron ever checked.
+		self::run_pending( $article_id, 'loopback' );
 		exit;
 	}
 
 	/**
 	 * Generate (or regenerate) the draft article for a brief's article id.
-	 * Returns the post ID, or WP_Error. Runs synchronously; callers that need
-	 * to avoid gateway timeouts should use queue_draft() instead.
+	 * Returns the post ID once actually finished, or WP_Error — including,
+	 * routinely, a 'verlo_still_writing' WP_Error while the AI job it just
+	 * submitted or checked on isn't done yet (see do_generate_draft(); this
+	 * is never a blocking call, so it always returns fast regardless of how
+	 * long the underlying article takes). Callers that need this driven to
+	 * completion across repeated polls, not called directly once, should use
+	 * queue_draft() (submit) + run_pending() (each subsequent check) instead.
 	 */
 	public static function generate_draft( $article_id ) {
 		if ( ! Verlo_Topical_Map::is_approved() ) {
@@ -270,15 +354,22 @@ class Verlo_Generator {
 	}
 
 	/** Lock TTL in seconds. Must comfortably exceed the true worst-case hold
-	 * time, not just the AI call: write_article() can run up to ~180s
-	 * (Verlo_SaaS_Client::run_job timeout) plus up to ~30s to submit the job,
-	 * and apply_to_post() afterward sideloads up to 4 images sequentially at
-	 * up to 30s each (class-verlo-images.php). A TTL shorter than that lets
-	 * the WP-Cron fallback or poll-driven self-heal "steal" a lock from a
-	 * worker that's still legitimately running, producing a duplicate paid
-	 * API call and a duplicate draft post — this happened at the previous
-	 * 150s value. 400s leaves real headroom above the ~330s worst case. */
-	const LOCK_TTL = 400;
+	 * time for a SINGLE invocation — which, now that generation is
+	 * submit-then-poll (do_generate_draft()) rather than one call that
+	 * blocks until the AI write finishes, is much shorter than it used to
+	 * be: either a single job-submission POST (~30s worst case), or a single
+	 * status-poll GET followed — only once the AI is actually done — by the
+	 * real build (block conversion, post creation, and apply_to_post()
+	 * sideloading up to 4 images sequentially at up to 30s each,
+	 * class-verlo-images.php). ~150s comfortably covers that build-phase
+	 * worst case. A TTL shorter than the true worst case lets another
+	 * dispatch path "steal" a lock from a worker still legitimately running,
+	 * producing a duplicate paid API call and a duplicate draft post — this
+	 * happened at a previous, too-low value (150s, back when a single
+	 * invocation could hold the lock for the ENTIRE AI wait); it doesn't
+	 * apply here since the AI wait itself no longer happens inside any one
+	 * locked invocation at all. */
+	const LOCK_TTL = 150;
 
 	/**
 	 * Acquire a short-lived generation lock. Returns a random owner token on
@@ -357,25 +448,101 @@ class Verlo_Generator {
 	/**
 	 * The actual generation work, run under the lock held by generate_draft().
 	 * Each phase is timed server-side so the Logs tab shows exactly where the
-	 * time goes (AI call vs. images vs. block conversion), and the true total
-	 * duration is recorded (independent of the browser's resetting timer).
+	 * time goes (block conversion vs. images), and the true total duration for
+	 * THIS invocation is recorded — but see set_gen_status()'s queued_at
+	 * docblock for why that's not the same as true elapsed time overall.
+	 *
+	 * Submit-then-poll, not submit-and-block: this used to call write_article()
+	 * once and block on it for however long the AI write took (up to 180s,
+	 * Verlo_SaaS_Client::run_job()'s own timeout). That single long-lived
+	 * request is exactly the kind background loopback dispatch is vulnerable
+	 * to hosts silently killing (set_time_limit(0) only overrides PHP's own
+	 * tracking, not a web-server-level execution ceiling some hosts enforce
+	 * independently) — confirmed live 2026-08-24: two separate generations
+	 * held their lock for 7+ and 11+ minutes with the underlying AI call
+	 * having actually finished in under three, and no error, fatal, or
+	 * completion ever logged for that stalled invocation, because it was
+	 * killed somewhere a try/catch and even a finally block can't run.
+	 *
+	 * No single invocation now blocks: this function either submits the job
+	 * (a single fast POST) and returns, or — once a job is already in
+	 * flight — checks it ONCE (a single fast GET) and either hands off again
+	 * or, only once the AI is actually done, does the real build. What drives
+	 * repeated checks forward is the poll-driven self-heal already used
+	 * elsewhere (admin/class-verlo-brief-admin.php's ajax_gen_status(), now
+	 * triggered on every poll while a job is in flight, not just once
+	 * "stalled") plus a self-rescheduling WP-Cron fallback (run_via_cron()).
 	 */
 	protected static function do_generate_draft( $article_id, $brief ) {
 		$t_start = microtime( true );
 		$timing  = array();
 
-		$profile = Verlo_Profile::get();
+		$job_id = Verlo_Brief::get_saas_job( $article_id );
 
-		$t = microtime( true );
-		$parsed  = self::write_article( $brief, $profile );
-		$timing['ai_write_s'] = round( microtime( true ) - $t, 1 );
+		if ( ! $job_id ) {
+			$profile = Verlo_Profile::get();
+			$payload = self::build_article_payload( $brief, $profile );
+			$job_id  = Verlo_SaaS_Client::request_job( 'article', $payload );
+			if ( is_wp_error( $job_id ) ) {
+				// Only tolerate genuine transport-level failures (a network
+				// blip reaching the SaaS at all) as "try again next cycle" -
+				// business-logic errors (plan limit, billing, not connected,
+				// a malformed response) are real and should surface right
+				// away, not get silently retried for up to 10 minutes first.
+				$transient = in_array( $job_id->get_error_code(), array( 'verlo_timeout', 'verlo_transport' ), true );
+				$status    = Verlo_Brief::get_gen_status( $article_id );
+				$age       = $status['queued_at'] ? ( time() - (int) $status['queued_at'] ) : 0;
+				if ( $transient && $age <= 10 * MINUTE_IN_SECONDS ) {
+					return new WP_Error( 'verlo_still_writing', 'Could not reach the Verlo server, will retry: ' . $job_id->get_error_message() );
+				}
+				return $job_id;
+			}
+
+			Verlo_Brief::set_saas_job( $article_id, $job_id );
+			Verlo_Brief::set_gen_status( $article_id, 'running', 'Writing the article…' );
+			return new WP_Error( 'verlo_still_writing', 'Article job submitted; waiting for the AI to finish.' );
+		}
+
+		// A job is already in flight for this cycle. Check it once — never a
+		// blocking wait — and only proceed past here if it's genuinely done.
+		$poll = Verlo_SaaS_Client::poll_job( $job_id );
+		if ( is_wp_error( $poll ) ) {
+			// A single failed status check (network blip, transient SaaS
+			// hiccup) isn't fatal on its own — the old design tolerated up to
+			// 3 in a row before giving up (Verlo_SaaS_Client::wait_for_result()),
+			// and this is checked far more often now (every browser poll,
+			// ~2.5s, plus WP-Cron every ~10s) so a transient failure just gets
+			// retried moments later regardless. Only actually give up once the
+			// WHOLE cycle has run unreasonably long — queued_at, not this one
+			// poll — so a genuinely unreachable SaaS doesn't leave a job
+			// stuck "running" forever.
+			$status = Verlo_Brief::get_gen_status( $article_id );
+			$age    = $status['queued_at'] ? ( time() - (int) $status['queued_at'] ) : 0;
+			if ( $age > 10 * MINUTE_IN_SECONDS ) { return $poll; }
+			return new WP_Error( 'verlo_still_writing', 'Status check failed, will retry: ' . $poll->get_error_message() );
+		}
+
+		$job_state = isset( $poll['status'] ) ? (string) $poll['status'] : 'unknown';
+		if ( 'error' === $job_state ) {
+			$msg = isset( $poll['message'] ) ? (string) $poll['message'] : 'Article generation failed.';
+			return new WP_Error( 'verlo_job_error', $msg );
+		}
+		if ( 'done' !== $job_state ) {
+			return new WP_Error( 'verlo_still_writing', 'Still waiting on the AI (status: ' . $job_state . ').' );
+		}
+
+		$parsed = self::parse_article_result( isset( $poll['result'] ) && is_array( $poll['result'] ) ? $poll['result'] : array() );
 		if ( is_wp_error( $parsed ) ) { return $parsed; }
 
 		$t = microtime( true );
 		$content = self::sanitize_content( $parsed['content'], $brief );
 		$content = Verlo_Text::scrub_stale_years( $content );
 		$content = Verlo_Text::humanize( $content );
-		$blocks  = self::to_blocks( $content );
+		// Extract the FAQ schema from the same clean HTML the reader will see
+		// (before to_blocks() below rewrites it as Gutenberg block comments) so
+		// the structured data can never drift from what's actually on the page.
+		$faq_schema = class_exists( 'Verlo_Faq_Schema' ) ? Verlo_Faq_Schema::build( $content ) : '';
+		$blocks  = self::to_blocks( $content ) . $faq_schema;
 		$timing['process_s'] = round( microtime( true ) - $t, 1 );
 
 		// Resolve the pillar's category (additive; should already exist post-approval).
@@ -429,10 +596,27 @@ class Verlo_Generator {
 
 		$timing['total_s'] = round( microtime( true ) - $t_start, 1 );
 
-		$run_id = isset( $brief['gen']['run_id'] ) ? (string) $brief['gen']['run_id'] : '';
+		// total_s is only this specific execution's own duration - accurate,
+		// but not what "generated in Xs" should mean to a user, and actively
+		// misleading whenever this ISN'T the execution that did the real
+		// work (see set_gen_status()'s queued_at docblock for why that
+		// happens: a stalled first attempt, then a second run that gets the
+		// first one's already-finished result back near-instantly via the
+		// SaaS side's idempotency key). wall_clock_s, timed from the user's
+		// actual click, is what the UI displays; total_s stays purely for
+		// the Logs tab's phase breakdown (images vs. block conversion,
+		// $timing above), which IS about this specific execution — the AI
+		// write itself no longer has a comparable single-execution timer,
+		// since submitting and (on a later, separate invocation) collecting
+		// it are now two different calls; wall_clock_s already covers it.
+		$queued_at     = Verlo_Brief::get_gen_status( $article_id )['queued_at'];
+		$wall_clock_s  = $queued_at ? round( microtime( true ) - $queued_at, 1 ) : $timing['total_s'];
+
+		$run_id = Verlo_Brief::get_run_id( $article_id );
 
 		// Persist the real server-side timing for the UI and diagnostics.
-		Verlo_Log::info( 'gen.timing', 'Article generated in ' . $timing['total_s'] . 's', array_merge( $timing, array(
+		Verlo_Log::info( 'gen.timing', 'Article generated in ' . $wall_clock_s . 's (this run took ' . $timing['total_s'] . 's)', array_merge( $timing, array(
+			'wall_clock_s'  => $wall_clock_s,
 			'run_id'        => $run_id,
 			'article_id'    => $article_id,
 			'keyword'       => $brief['keyword'],
@@ -457,7 +641,7 @@ class Verlo_Generator {
 				'title'       => (string) $title,
 				'pillar'      => (string) ( $brief['pillar'] ?? '' ),
 				'word_target' => (int) ( $brief['word_count'] ?? 0 ),
-				'gen_seconds' => (float) $timing['total_s'],
+				'gen_seconds' => (float) $wall_clock_s,
 				'run_id'      => $run_id,
 				'content'     => $final_content,
 			) );
@@ -474,9 +658,14 @@ class Verlo_Generator {
 			'status'     => 'draft',
 			'created_at' => isset( $brief['draft']['created_at'] ) ? (int) $brief['draft']['created_at'] : time(),
 			'updated_at' => time(),
-			'gen_seconds'=> isset( $timing['total_s'] ) ? (float) $timing['total_s'] : null,
+			'gen_seconds'=> $wall_clock_s,
 		);
 		Verlo_Brief::save( $article_id, $brief );
+
+		// This cycle is genuinely finished — clear the in-flight job id so a
+		// future fresh Generate click (a new cycle) submits its own new job
+		// rather than finding this one still recorded.
+		Verlo_Brief::set_saas_job( $article_id, '' );
 
 		return (int) $post_id;
 	}
@@ -533,10 +722,12 @@ class Verlo_Generator {
 	}
 
 	/**
-	 * Submit the article job to the Verlo SaaS and return a parsed result.
-	 * Returns [ 'title', 'meta', 'excerpt', 'content' ] or WP_Error.
+	 * Build the article job payload. Pure — no I/O — split out of the old
+	 * write_article() (which submitted-and-blocked in one call) so
+	 * do_generate_draft() can submit and poll as two separate, both-fast
+	 * steps instead.
 	 */
-	protected static function write_article( $brief, $profile ) {
+	protected static function build_article_payload( $brief, $profile ) {
 		$payload = array(
 			'profile' => array(
 				'niche'              => $profile['niche'],
@@ -573,9 +764,14 @@ class Verlo_Generator {
 			$payload['brief_id'] = (string) $brief['brief_id'];
 		}
 
-		$result = Verlo_SaaS_Client::run_job( 'article', $payload, 180 );
-		if ( is_wp_error( $result ) ) { return $result; }
+		return $payload;
+	}
 
+	/**
+	 * Validate/sanitize a completed job's raw result. Pure — no I/O.
+	 * Returns [ 'title', 'meta', 'excerpt', 'content' ] or WP_Error.
+	 */
+	protected static function parse_article_result( $result ) {
 		if ( empty( $result['content_html'] ) ) {
 			return new WP_Error( 'verlo_bad_output', 'The Verlo server did not return article content.' );
 		}
@@ -696,8 +892,19 @@ class Verlo_Generator {
 	}
 
 	/**
-	 * Store SEO title / meta description / focus keyword for both Yoast and
-	 * Rank Math (harmless if either plugin is absent).
+	 * Store SEO title / meta description / focus keyword under whichever SEO
+	 * plugin(s) are actually active - detected, not assumed. Previously this
+	 * wrote unconditionally to Yoast's and Rank Math's postmeta keys, which
+	 * "worked" for those two specifically (writing meta an inactive plugin
+	 * never reads is harmless) but silently did nothing on a site running
+	 * SEOPress, The SEO Framework, or no SEO plugin at all - those meta
+	 * title/descriptions never reached a theme or search engine anywhere.
+	 *
+	 * AIOSEO is deliberately not covered: its current major version stores
+	 * this in its own custom DB table, not postmeta, and guessing at that
+	 * schema without a real install to verify against risks silently writing
+	 * nothing useful while looking like it worked - worse than the gap being
+	 * visible in the log below.
 	 */
 	protected static function apply_seo_meta( $post_id, $brief, $parsed ) {
 		$meta_desc = '' !== $parsed['meta'] ? $parsed['meta'] : $brief['angle'];
@@ -707,14 +914,43 @@ class Verlo_Generator {
 		$seo_title = self::clamp_text( $seo_title, 60 );
 		$meta_desc = self::clamp_text( $meta_desc, 155 );
 
-		// Yoast
-		update_post_meta( $post_id, '_yoast_wpseo_title', $seo_title );
-		update_post_meta( $post_id, '_yoast_wpseo_metadesc', $meta_desc );
-		update_post_meta( $post_id, '_yoast_wpseo_focuskw', $keyword );
-		// Rank Math
-		update_post_meta( $post_id, 'rank_math_title', $seo_title );
-		update_post_meta( $post_id, 'rank_math_description', $meta_desc );
-		update_post_meta( $post_id, 'rank_math_focus_keyword', $keyword );
+		$applied = array();
+
+		if ( defined( 'WPSEO_VERSION' ) ) {
+			update_post_meta( $post_id, '_yoast_wpseo_title', $seo_title );
+			update_post_meta( $post_id, '_yoast_wpseo_metadesc', $meta_desc );
+			update_post_meta( $post_id, '_yoast_wpseo_focuskw', $keyword );
+			$applied[] = 'yoast';
+		}
+
+		if ( defined( 'RANK_MATH_VERSION' ) || class_exists( 'RankMath' ) ) {
+			update_post_meta( $post_id, 'rank_math_title', $seo_title );
+			update_post_meta( $post_id, 'rank_math_description', $meta_desc );
+			update_post_meta( $post_id, 'rank_math_focus_keyword', $keyword );
+			$applied[] = 'rank_math';
+		}
+
+		if ( defined( 'SEOPRESS_VERSION' ) ) {
+			update_post_meta( $post_id, '_seopress_titles_title', $seo_title );
+			update_post_meta( $post_id, '_seopress_titles_desc', $meta_desc );
+			update_post_meta( $post_id, '_seopress_analysis_target_kw', $keyword );
+			$applied[] = 'seopress';
+		}
+
+		if ( defined( 'THE_SEO_FRAMEWORK_VERSION' ) || class_exists( 'The_SEO_Framework\Load' ) ) {
+			// TSF reuses the old Genesis meta keys for backward compatibility
+			// with themes/plugins built against Genesis - this is correct,
+			// documented TSF behaviour, not a mistake.
+			update_post_meta( $post_id, '_genesis_title', $seo_title );
+			update_post_meta( $post_id, '_genesis_description', $meta_desc );
+			$applied[] = 'the_seo_framework';
+		}
+
+		if ( empty( $applied ) && class_exists( 'Verlo_Log' ) ) {
+			Verlo_Log::info( 'gen.no_seo_plugin', 'No supported SEO plugin detected - the generated SEO title and meta description were not written anywhere a theme or search engine would read them.', array(
+				'post_id' => $post_id,
+			) );
+		}
 	}
 
 	/**
@@ -774,6 +1010,8 @@ class Verlo_Generator {
 				return self::list_to_block( $dom, $node, 'ol' === $tag );
 			case 'table':
 				return self::table_to_block( $dom, $node );
+			case 'blockquote':
+				return self::blockquote_to_block( $dom, $node );
 			default:
 				// Wrap anything else as a paragraph if it has content.
 				return '' !== $inner ? "<!-- wp:paragraph -->\n<p>{$inner}</p>\n<!-- /wp:paragraph -->\n\n" : '';
@@ -797,17 +1035,52 @@ class Verlo_Generator {
 	}
 
 	/**
-	 * Wrap a <table> element in Gutenberg's table block markup so it renders
-	 * as a native, editable table instead of falling through the default
-	 * case, which previously wrapped it in a <p> tag - invalid HTML that
-	 * Gutenberg flagged as content needing manual "attempt block recovery".
+	 * Wrap a <table> element as a Custom HTML block, not Gutenberg's native
+	 * wp:table - deliberately, not an oversight. wp:table isn't a raw-HTML
+	 * passthrough: core/table's head/body/foot attributes are derived FROM
+	 * the markup via query-selector sourcing (its block.json), and Gutenberg
+	 * re-validates by re-serializing those attributes back to HTML on every
+	 * load. Any subtle mismatch from AI-generated markup (whitespace, cell
+	 * structure) trips "Block contains unexpected or invalid content, Attempt
+	 * recovery" even though the HTML itself is perfectly valid and renders
+	 * fine - confirmed live 2026-08-26 on a real generated article (this
+	 * function previously used wp:table specifically to fix an EARLIER
+	 * "attempt recovery" cause - the default case's <p>-wrapping - without
+	 * knowing wp:table had its own separate one). wp:html has no attributes
+	 * to reconstruct, so there is nothing left to mismatch. Same
+	 * wp-block-table wrapper/classes so themes styling that class still
+	 * apply; the only real cost is the table isn't cell-click-editable in
+	 * the block editor, which doesn't matter for AI-generated content that's
+	 * reviewed as a whole before publishing anyway.
 	 */
 	protected static function table_to_block( $dom, $node ) {
 		$inner = trim( preg_replace( '/\s+/', ' ', self::inner_html( $dom, $node ) ) );
 		if ( '' === $inner ) { return ''; }
-		return "<!-- wp:table -->\n"
+		return "<!-- wp:html -->\n"
 			. "<figure class=\"wp-block-table\"><table class=\"wp-block-table\">{$inner}</table></figure>\n"
-			. "<!-- /wp:table -->\n\n";
+			. "<!-- /wp:html -->\n\n";
+	}
+
+	/**
+	 * Wrap a <blockquote> in Gutenberg's quote block markup - the sparing,
+	 * standalone-insight "pull quote" the article prompt is now allowed to
+	 * use (see verlo-saas's buildArticleSystemPrompt() PULL QUOTE rule),
+	 * kept distinct from a plain paragraph so it actually renders with the
+	 * theme's real quote styling instead of silently degrading into
+	 * unstyled text via the default case below.
+	 */
+	protected static function blockquote_to_block( $dom, $node ) {
+		$inner = trim( preg_replace( '/\s+/', ' ', self::inner_html( $dom, $node ) ) );
+		if ( '' === $inner ) { return ''; }
+		// The AI is instructed to wrap the quote text in its own <p>, but
+		// tolerate bare text too (Gutenberg's quote block still expects a
+		// <p> child either way).
+		if ( ! preg_match( '/<p[\s>]/i', $inner ) ) {
+			$inner = "<p>{$inner}</p>";
+		}
+		return "<!-- wp:quote -->\n"
+			. "<blockquote class=\"wp-block-quote\">{$inner}</blockquote>\n"
+			. "<!-- /wp:quote -->\n\n";
 	}
 
 	protected static function inner_html( $dom, $node ) {

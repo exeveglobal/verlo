@@ -15,7 +15,7 @@ class Verlo_Log_Admin {
 	}
 
 	public static function menu() {
-		add_submenu_page( 'verlo', 'Logs', 'Logs', 'manage_options', 'verlo-logs', array( __CLASS__, 'render' ) );
+		add_submenu_page( 'verlo', __( 'Logs', 'verlo' ), __( 'Logs', 'verlo' ), 'manage_options', 'verlo-logs', array( __CLASS__, 'render' ) );
 	}
 
 	public static function render() {
@@ -40,46 +40,62 @@ class Verlo_Log_Admin {
 		$notice  = isset( $_GET['verlo_notice'] ) ? sanitize_text_field( wp_unslash( $_GET['verlo_notice'] ) ) : '';
 		?>
 		<div class="wrap verlo-wrap">
-			<h1>Logs
-				<a href="<?php echo esc_url( VERLO_DOCS_URL ); ?>" target="_blank" rel="noopener noreferrer" class="page-title-action">Help &amp; Docs</a>
+			<h1><?php esc_html_e( 'Logs', 'verlo' ); ?>
+				<a href="<?php echo esc_url( VERLO_DOCS_URL ); ?>" target="_blank" rel="noopener noreferrer" class="page-title-action"><?php esc_html_e( 'Help & Docs', 'verlo' ); ?></a>
 			</h1>
-			<p style="margin-top:2px;color:#646970;">Technical events from Verlo: generation attempts, calls, and errors (including API credit, rate limits, timeouts, and security-plugin blocks). The most recent <?php echo (int) Verlo_Log::MAX_ROWS; ?> events are kept.</p>
+			<p style="margin-top:2px;color:#646970;">
+				<?php
+				printf(
+					/* translators: %d: maximum number of log rows kept */
+					esc_html__( 'Technical events from Verlo: generation attempts, calls, and errors (including API credit, rate limits, timeouts, and security-plugin blocks). The most recent %d events are kept.', 'verlo' ),
+					(int) Verlo_Log::MAX_ROWS
+				);
+				?>
+			</p>
 
 			<?php if ( $notice ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php echo esc_html( $notice ); ?></p></div>
 			<?php endif; ?>
 
 			<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0;">
-				<a class="button <?php echo '' === $filter ? 'button-primary' : ''; ?>" href="<?php echo esc_url( $base ); ?>">All (<?php echo (int) Verlo_Log::count(); ?>)</a>
-				<a class="button <?php echo 'error' === $filter ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'level', 'error', $base ) ); ?>">Errors (<?php echo (int) $counts['error']; ?>)</a>
-				<a class="button <?php echo 'warn' === $filter ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'level', 'warn', $base ) ); ?>">Warnings (<?php echo (int) $counts['warn']; ?>)</a>
-				<a class="button <?php echo 'info' === $filter ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'level', 'info', $base ) ); ?>">Info (<?php echo (int) $counts['info']; ?>)</a>
+				<a class="button <?php echo '' === $filter ? 'button-primary' : ''; ?>" href="<?php echo esc_url( $base ); ?>"><?php printf( /* translators: %d: total event count */ esc_html__( 'All (%d)', 'verlo' ), (int) Verlo_Log::count() ); ?></a>
+				<a class="button <?php echo 'error' === $filter ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'level', 'error', $base ) ); ?>"><?php printf( /* translators: %d: error count */ esc_html__( 'Errors (%d)', 'verlo' ), (int) $counts['error'] ); ?></a>
+				<a class="button <?php echo 'warn' === $filter ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'level', 'warn', $base ) ); ?>"><?php printf( /* translators: %d: warning count */ esc_html__( 'Warnings (%d)', 'verlo' ), (int) $counts['warn'] ); ?></a>
+				<a class="button <?php echo 'info' === $filter ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'level', 'info', $base ) ); ?>"><?php printf( /* translators: %d: info count */ esc_html__( 'Info (%d)', 'verlo' ), (int) $counts['info'] ); ?></a>
 
 				<span style="flex:1"></span>
 
 				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline">
 					<input type="hidden" name="action" value="verlo_log_export" />
 					<?php wp_nonce_field( 'verlo_log_export' ); ?>
-					<button type="submit" class="button">Download as JSON</button>
+					<button type="submit" class="button"><?php esc_html_e( 'Download as JSON', 'verlo' ); ?></button>
 				</form>
-				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline" onsubmit="return confirm('Clear all logged events? This cannot be undone.');">
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline" onsubmit="return confirm('<?php echo esc_js( __( 'Clear all logged events? This cannot be undone.', 'verlo' ) ); ?>');">
 					<input type="hidden" name="action" value="verlo_log_clear" />
 					<?php wp_nonce_field( 'verlo_log_clear' ); ?>
-					<button type="submit" class="button" style="color:#b32d2e;">Clear log</button>
+					<button type="submit" class="button" style="color:#b32d2e;"><?php esc_html_e( 'Clear log', 'verlo' ); ?></button>
 				</form>
 			</div>
 
 			<?php if ( empty( $rows ) ) : ?>
-				<div class="verlo-card"><p class="verlo-sub" style="margin:0;">No events logged yet<?php echo $filter ? ' at this level' : ''; ?>. Events appear here as Verlo runs (e.g. when you generate a brief or an article).</p></div>
+				<div class="verlo-card"><p class="verlo-sub" style="margin:0;">
+					<?php
+					if ( $filter ) {
+						esc_html_e( 'No events logged yet at this level. Events appear here as Verlo runs (e.g. when you generate a brief or an article).', 'verlo' );
+					} else {
+						esc_html_e( 'No events logged yet. Events appear here as Verlo runs (e.g. when you generate a brief or an article).', 'verlo' );
+					}
+					?>
+				</p></div>
 			<?php else : ?>
 				<table class="widefat striped verlo-log-table">
 					<thead>
 						<tr>
-							<th style="width:150px;">Time</th>
-							<th style="width:70px;">Level</th>
-							<th style="width:130px;">Event</th>
-							<th>Message</th>
-							<th style="width:90px;">Run</th>
+							<th style="width:150px;"><?php esc_html_e( 'Time', 'verlo' ); ?></th>
+							<th style="width:70px;"><?php esc_html_e( 'Level', 'verlo' ); ?></th>
+							<th style="width:130px;"><?php esc_html_e( 'Event', 'verlo' ); ?></th>
+							<th><?php esc_html_e( 'Message', 'verlo' ); ?></th>
+							<th style="width:90px;"><?php esc_html_e( 'Run', 'verlo' ); ?></th>
 							<th style="width:34px;"></th>
 						</tr>
 					</thead>
@@ -98,7 +114,8 @@ class Verlo_Log_Admin {
 								$run_colors[ $rid ] = $run_palette[ $next_color % count( $run_palette ) ];
 								$next_color++;
 								$run_seq++;
-								$run_labels[ $rid ] = 'Gen #' . $run_seq;
+								/* translators: %d: sequential generation run number */
+								$run_labels[ $rid ] = sprintf( __( 'Gen #%d', 'verlo' ), $run_seq );
 							}
 						}
 						?>
@@ -115,7 +132,19 @@ class Verlo_Log_Admin {
 							$bstyle = $rcol ? 'box-shadow: inset 4px 0 0 ' . $rcol . ';' : '';
 							?>
 							<tr style="<?php echo esc_attr( $bstyle ); ?>">
-								<td><?php echo esc_html( $local ); ?><br><span style="color:#888;font-size:11px;"><?php echo $when ? esc_html( human_time_diff( $when, time() ) ) . ' ago' : ''; ?></span></td>
+								<td>
+									<?php echo esc_html( $local ); ?><br><span style="color:#888;font-size:11px;">
+									<?php
+									if ( $when ) {
+										printf(
+											/* translators: %s: human-readable elapsed time, e.g. "5 minutes" */
+											esc_html__( '%s ago', 'verlo' ),
+											esc_html( human_time_diff( $when, time() ) )
+										);
+									}
+									?>
+									</span>
+								</td>
 								<td><span style="display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;color:#fff;background:<?php echo esc_attr( $color ); ?>;"><?php echo esc_html( strtoupper( $lvl ) ); ?></span></td>
 								<td><code style="font-size:11px;"><?php echo esc_html( $r['event'] ?? '' ); ?></code></td>
 								<td><?php echo esc_html( $r['message'] ?? '' ); ?></td>
@@ -143,7 +172,7 @@ class Verlo_Log_Admin {
 						<?php endforeach; ?>
 					</tbody>
 				</table>
-				<p class="verlo-sub" style="margin-top:8px;color:#646970;font-size:12px;">Rows from the same article generation share a coloured “Gen #” tag and left edge, so you can follow one run end-to-end.</p>
+				<p class="verlo-sub" style="margin-top:8px;color:#646970;font-size:12px;"><?php esc_html_e( 'Rows from the same article generation share a coloured "Gen #" tag and left edge, so you can follow one run end-to-end.', 'verlo' ); ?></p>
 			<?php endif; ?>
 		</div>
 
@@ -169,16 +198,16 @@ class Verlo_Log_Admin {
 
 	public static function handle_clear() {
 		if ( ! current_user_can( 'manage_options' ) || ! check_admin_referer( 'verlo_log_clear' ) ) {
-			wp_die( 'Permission denied.' );
+			wp_die( esc_html__( 'Permission denied.', 'verlo' ) );
 		}
 		Verlo_Log::clear();
-		wp_safe_redirect( add_query_arg( 'verlo_notice', rawurlencode( 'Log cleared.' ), admin_url( 'admin.php?page=verlo-logs' ) ) );
+		wp_safe_redirect( add_query_arg( 'verlo_notice', rawurlencode( __( 'Log cleared.', 'verlo' ) ), admin_url( 'admin.php?page=verlo-logs' ) ) );
 		exit;
 	}
 
 	public static function handle_export() {
 		if ( ! current_user_can( 'manage_options' ) || ! check_admin_referer( 'verlo_log_export' ) ) {
-			wp_die( 'Permission denied.' );
+			wp_die( esc_html__( 'Permission denied.', 'verlo' ) );
 		}
 		$json = Verlo_Log::export_json();
 		nocache_headers();

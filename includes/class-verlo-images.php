@@ -198,7 +198,8 @@ class Verlo_Images {
 		// higher-res source so the hero and social/OG image look sharp.
 		$featured = array_shift( $photos );
 		if ( ! get_post_thumbnail_id( $post_id ) ) {
-			$att = self::sideload( $featured['url_hi'], $post_id, $keyword, $featured['credit'], $featured['credit_url'] );
+			$alt = self::build_alt_text( $featured['alt'] ?? '', $keyword, 0 );
+			$att = self::sideload( $featured['url_hi'], $post_id, $alt, $featured['credit'], $featured['credit_url'] );
 			if ( $att ) { set_post_thumbnail( $post_id, $att['id'] ); }
 		}
 
@@ -207,7 +208,7 @@ class Verlo_Images {
 		$i      = 0;
 		foreach ( $photos as $photo ) {
 			if ( $i >= $target_inline ) { break; }
-			$alt = $keyword . ( $i > 0 ? ' ' . ( $i + 1 ) : '' );
+			$alt = self::build_alt_text( $photo['alt'] ?? '', $keyword, $i );
 			$att = self::sideload( $photo['url'], $post_id, $alt, $photo['credit'], $photo['credit_url'] );
 			if ( $att ) {
 				$blocks[] = self::image_block( $att['id'], $att['url'], $alt, $photo['credit'] );
@@ -216,6 +217,32 @@ class Verlo_Images {
 		}
 
 		return empty( $blocks ) ? $content : self::insert_inline( $content, $blocks );
+	}
+
+	/**
+	 * Build real, descriptive alt text for one image. Pexels' own API returns
+	 * a short human-written description per photo (e.g. "A red bicycle
+	 * leaning against a brick wall") which search() already fetches into
+	 * $photo['alt'] — previously discarded in favour of the bare focus
+	 * keyword repeated across every image in the article, which was
+	 * identical (or near-identical) alt text site-wide and described nothing
+	 * about what was actually in each photo.
+	 *
+	 * Falls back to the previous keyword-based behaviour only when the
+	 * source photo has no description at all (rare, but Pexels doesn't
+	 * guarantee one for every photo).
+	 */
+	protected static function build_alt_text( $photo_alt, $keyword, $index ) {
+		$photo_alt = trim( (string) $photo_alt );
+		if ( '' === $photo_alt ) {
+			return $keyword . ( $index > 0 ? ' ' . ( $index + 1 ) : '' );
+		}
+		// Keep the real description; only add the keyword if it isn't
+		// naturally present already, so this never reads as keyword-stuffed.
+		if ( false === stripos( $photo_alt, $keyword ) ) {
+			return rtrim( $photo_alt, '.' ) . ', ' . $keyword;
+		}
+		return $photo_alt;
 	}
 
 	/**
