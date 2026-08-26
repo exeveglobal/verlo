@@ -3,7 +3,7 @@
  * Plugin Name:       Verlo
  * Plugin URI:        https://exeve.global/
  * Description:       Verlo plans, writes, and optimizes SEO content for your site, end to end. It builds a knowledge graph of your existing content, designs a topical map of pillars and planned articles, turns each into a content brief, and generates publish-ready, human-quality draft articles, complete with on-page SEO, internal links, and stock images, for your review before publishing.
- * Version:           1.1.31
+ * Version:           1.1.32
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            EXEVE
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'VERLO_VERSION', '1.1.31' );
+define( 'VERLO_VERSION', '1.1.32' );
 define( 'VERLO_FILE', __FILE__ );
 define( 'VERLO_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VERLO_URL', plugin_dir_url( __FILE__ ) );
@@ -57,13 +57,26 @@ require_once VERLO_DIR . 'includes/class-verlo-faq-schema.php';
 require_once VERLO_DIR . 'includes/class-verlo-generator.php';
 require_once VERLO_DIR . 'includes/class-verlo-async-job.php';
 require_once VERLO_DIR . 'includes/class-verlo-images.php';
-require_once VERLO_DIR . 'admin/class-verlo-admin.php';
-require_once VERLO_DIR . 'admin/class-verlo-onboarding-admin.php';
-require_once VERLO_DIR . 'admin/class-verlo-guided-tour.php';
-require_once VERLO_DIR . 'admin/class-verlo-profile-admin.php';
-require_once VERLO_DIR . 'admin/class-verlo-map-admin.php';
-require_once VERLO_DIR . 'admin/class-verlo-brief-admin.php';
-require_once VERLO_DIR . 'admin/class-verlo-log-admin.php';
+
+// admin/*.php (~180KB) is only ever used from verlo_boot()'s own is_admin()
+// block below - was previously require_once'd unconditionally, meaning it
+// was parsed on every single front-end page view (every post, every
+// product page) for code that page could never reach. is_admin() is true
+// for /wp-admin/ requests AND admin-ajax.php AND admin-post.php - which
+// covers every real call site (the AJAX self-heal polls and the loopback
+// background workers all run through admin-post.php/admin-ajax.php) - and
+// false for the front-end and for wp-cron.php, neither of which touches
+// anything in admin/ (confirmed: run_via_cron() and the loopback workers
+// only call into includes/ classes). Safe to gate.
+if ( is_admin() ) {
+	require_once VERLO_DIR . 'admin/class-verlo-admin.php';
+	require_once VERLO_DIR . 'admin/class-verlo-onboarding-admin.php';
+	require_once VERLO_DIR . 'admin/class-verlo-guided-tour.php';
+	require_once VERLO_DIR . 'admin/class-verlo-profile-admin.php';
+	require_once VERLO_DIR . 'admin/class-verlo-map-admin.php';
+	require_once VERLO_DIR . 'admin/class-verlo-brief-admin.php';
+	require_once VERLO_DIR . 'admin/class-verlo-log-admin.php';
+}
 
 /**
  * Plugin settings (API credentials etc.).
