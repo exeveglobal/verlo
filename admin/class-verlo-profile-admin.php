@@ -396,7 +396,7 @@ class Verlo_Profile_Admin {
 					</h2>
 
 					<?php if ( $connected ) : ?>
-						<p class="verlo-sub"><?php esc_html_e( 'Your license is active. Disconnect to enter a different license key.', 'verlo' ); ?></p>
+						<p class="verlo-sub"><?php esc_html_e( 'Your license is active. Disconnecting releases this site from your Verlo account so it can be connected elsewhere, and lets you enter a different license key here.', 'verlo' ); ?></p>
 						<p class="verlo-meta" style="margin-bottom:12px;">
 							<?php
 							printf(
@@ -409,7 +409,7 @@ class Verlo_Profile_Admin {
 						<form method="post" action="<?php echo esc_url( $url ); ?>">
 							<input type="hidden" name="action" value="verlo_disconnect" />
 							<?php wp_nonce_field( 'verlo_disconnect' ); ?>
-							<button type="submit" class="button button-secondary" onclick="return confirm('<?php echo esc_js( __( 'Disconnect Verlo? Content generation will stop until you reconnect.', 'verlo' ) ); ?>');"><?php esc_html_e( 'Disconnect', 'verlo' ); ?></button>
+							<button type="submit" class="button button-secondary" onclick="return confirm('<?php echo esc_js( __( 'Disconnect Verlo? This releases the site from your Verlo account so it can be connected elsewhere. Your content stays in WordPress and your article history on Verlo is kept for when you reconnect. Content generation stops until you reconnect.', 'verlo' ) ); ?>');"><?php esc_html_e( 'Disconnect', 'verlo' ); ?></button>
 						</form>
 					<?php else : ?>
 						<div data-verlo-tour-target="connect"<?php echo Verlo_Guided_Tour::target_id_attr( 'connect' ); ?>>
@@ -621,11 +621,34 @@ class Verlo_Profile_Admin {
 		self::redirect( sprintf( /* translators: %s: plan name */ __( 'Connected! Verlo is active (%s plan).', 'verlo' ), $plan ) );
 	}
 
-	/** Disconnect and clear all stored auth data. */
+	/** Disconnect: release the site on Verlo (best effort), then clear all stored auth data. */
 	public static function handle_disconnect() {
 		self::guard( 'verlo_disconnect' );
+
+		// Release the site server-side first so another account can connect
+		// this URL, then always clear local auth data regardless of result.
+		$released = Verlo_Auth::release_remote();
 		Verlo_Auth::disconnect();
-		self::redirect( __( 'Verlo disconnected.', 'verlo' ) );
+
+		if ( true === $released ) {
+			self::redirect( __( 'Verlo disconnected. This site has been released from your account.', 'verlo' ) );
+		}
+
+		if ( is_wp_error( $released ) && 'verlo_free_plan_no_release' === $released->get_error_code() ) {
+			self::redirect( sprintf(
+				/* translators: %s: reason returned by the Verlo server */
+				__( 'Disconnected here. Your site stays linked to your Verlo account — %s', 'verlo' ),
+				$released->get_error_message()
+			) );
+		}
+
+		// Transport error or an unexpected server response — the local
+		// disconnect still happened; tell the user the release may not have.
+		self::redirect( sprintf(
+			/* translators: %s: reason */
+			__( 'Disconnected here, but the site may not have been released on Verlo: %s', 'verlo' ),
+			is_wp_error( $released ) ? $released->get_error_message() : __( 'unknown error', 'verlo' )
+		), true );
 	}
 
 	/** Nonce-signed link that starts the "Connect with Verlo" redirect flow. */

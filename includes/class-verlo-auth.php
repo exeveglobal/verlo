@@ -235,6 +235,63 @@ class Verlo_Auth {
 		return in_array( $feature, self::features(), true );
 	}
 
+	/**
+	 * Best-effort release of this site on the Verlo SaaS side, so the same
+	 * URL can be connected under a different account. Called from the admin
+	 * "Disconnect" handler BEFORE the local auth data is cleared — that local
+	 * clear happens regardless of what this returns.
+	 *
+	 * Returns true when the SaaS released the site (or there was nothing to
+	 * release), or a WP_Error describing why it did not:
+	 *   - 'verlo_free_plan_no_release' — the account is on Free; the site
+	 *     stays linked server-side (Free is one site for the life of the
+	 *     account). Not really a failure, just a no-op with a reason.
+	 *   - 'verlo_transport' / 'verlo_release_failed' — could not reach the
+	 *     server, or it returned an unexpected status.
+	 */
+	public static function release_remote() {
+		$token = (string) get_option( self::OPT_TOKEN, '' );
+		if ( '' === $token ) {
+			// Never connected, or already cleared — nothing to release.
+			return true;
+		}
+
+		$url      = Verlo_SaaS_Client::base_url() . '/v1/auth/disconnect';
+		$response = wp_remote_post( $url, array(
+			'timeout' => 15,
+			'headers' => array(
+				'Content-Type'  => 'application/json',
+				'Authorization' => 'Bearer ' . $token,
+			),
+			'body'    => wp_json_encode( array( 'source' => 'plugin' ) ),
+		) );
+
+		if ( is_wp_error( $response ) ) {
+			return new WP_Error(
+				'verlo_transport',
+				'Could not reach the Verlo server to release this site: ' . $response->get_error_message()
+			);
+		}
+
+		$code = (int) wp_remote_retrieve_response_code( $response );
+		$data = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( 200 === $code ) {
+			Verlo_Log::info( 'auth.released', 'Site released on Verlo' );
+			return true;
+		}
+
+		if ( 403 === $code ) {
+			$msg = isset( $data['message'] )
+				? (string) $data['message']
+				: 'Moving a site to another Verlo account is available on paid plans.';
+			return new WP_Error( 'verlo_free_plan_no_release', $msg );
+		}
+
+		$msg = isset( $data['message'] ) ? (string) $data['message'] : ( 'Verlo server returned HTTP ' . $code . '.' );
+		return new WP_Error( 'verlo_release_failed', $msg );
+	}
+
 	/** Clear all auth data (user-initiated disconnect). */
 	public static function disconnect() {
 		delete_option( self::OPT_TOKEN );
