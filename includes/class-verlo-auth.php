@@ -13,12 +13,13 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 class Verlo_Auth {
 
-	const OPT_TOKEN      = 'verlo_saas_token';
-	const OPT_SITE_ID    = 'verlo_saas_site_id';
-	const OPT_PLAN       = 'verlo_saas_plan';
-	const OPT_FEATURES   = 'verlo_saas_features';
-	const OPT_EXPIRES_AT = 'verlo_saas_expires_at';
-	const OPT_LK         = 'verlo_license_key'; // stored for auto-refresh on token expiry
+	const OPT_TOKEN       = 'verlo_saas_token';
+	const OPT_SITE_ID     = 'verlo_saas_site_id';
+	const OPT_PLAN        = 'verlo_saas_plan';
+	const OPT_FEATURES    = 'verlo_saas_features';
+	const OPT_EXPIRES_AT  = 'verlo_saas_expires_at';
+	const OPT_SITE_STATUS = 'verlo_saas_site_status'; // 'active' | 'disabled' (parked on Verlo's side)
+	const OPT_LK          = 'verlo_license_key'; // stored for auto-refresh on token expiry
 
 	/**
 	 * Get the current JWT token. Auto-refreshes if within 1 hour of expiry.
@@ -94,6 +95,11 @@ class Verlo_Auth {
 		update_option( self::OPT_PLAN,       $data['plan'],                        'no' );
 		update_option( self::OPT_FEATURES,   $data['features'] ?? array(),         'no' );
 		update_option( self::OPT_EXPIRES_AT, strtotime( $data['expires_at'] ?? '' ) ?: 0, 'no' );
+		// 'disabled' means the site is parked on Verlo's side because the
+		// account's plan covers fewer sites than are connected. The license
+		// is still valid; generation is refused until it's re-enabled from
+		// the Verlo dashboard (or the plan is upgraded).
+		update_option( self::OPT_SITE_STATUS, ( 'disabled' === ( $data['site_status'] ?? '' ) ) ? 'disabled' : 'active', 'no' );
 
 		// Store license key encrypted at rest where possible (see
 		// encrypt_license_key() below). Purpose: auto-refresh when the token
@@ -222,6 +228,16 @@ class Verlo_Auth {
 		return (string) get_option( self::OPT_SITE_ID, '' );
 	}
 
+	/** 'active' or 'disabled' — 'disabled' = parked on Verlo (plan covers fewer sites). */
+	public static function site_status() {
+		return 'disabled' === get_option( self::OPT_SITE_STATUS, 'active' ) ? 'disabled' : 'active';
+	}
+
+	/** True only when connected AND not parked on Verlo's side. */
+	public static function is_active() {
+		return self::is_connected() && 'disabled' !== self::site_status();
+	}
+
 	public static function plan() {
 		return (string) get_option( self::OPT_PLAN, 'free' );
 	}
@@ -299,6 +315,7 @@ class Verlo_Auth {
 		delete_option( self::OPT_PLAN );
 		delete_option( self::OPT_FEATURES );
 		delete_option( self::OPT_EXPIRES_AT );
+		delete_option( self::OPT_SITE_STATUS );
 		delete_option( self::OPT_LK );
 		Verlo_Log::info( 'auth.disconnected', 'Verlo disconnected' );
 	}

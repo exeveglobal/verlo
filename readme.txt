@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.34
+Stable tag: 1.1.35
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,9 @@ Yes, but a key is only active on one site at a time. Remove it from the current 
 Verlo doesn't expose which AI provider or model it uses in any part of the plugin, its output, or its support channels — this is intentional and not configurable.
 
 == Changelog ==
+
+= 1.1.35 =
+* Added a clear "paused" state for a site. If your Verlo plan covers fewer sites than you have connected (for example after a downgrade), the extra sites are paused rather than removed — all their history is kept. A paused site shows a notice in the Verlo admin and its content generation is off until you re-enable it from the Verlo dashboard or upgrade to cover more sites. Requires the matching verlo-saas backend update.
 
 = 1.1.34 =
 * Disconnecting Verlo now releases the site from your Verlo account on the server too, not just locally — so the same site can be connected under a different Verlo account afterward (for example, handing a site over to a client). Your content stays in WordPress and the site's article history on Verlo is kept for if you reconnect. Releasing a site to another account requires a paid plan; on the Free plan, Disconnect still clears the connection here but the site stays linked to your account. Requires the matching verlo-saas backend update.

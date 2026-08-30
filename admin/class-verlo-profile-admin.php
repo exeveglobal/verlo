@@ -390,13 +390,24 @@ class Verlo_Profile_Admin {
 								);
 								?>
 							</span>
+							<?php if ( 'disabled' === Verlo_Auth::site_status() ) : ?>
+								<span class="verlo-badge off" style="font-size:11px;"><?php esc_html_e( 'Paused', 'verlo' ); ?></span>
+							<?php endif; ?>
 						<?php else : ?>
 							<span class="verlo-badge off"><?php esc_html_e( 'Not connected', 'verlo' ); ?></span>
 						<?php endif; ?>
 					</h2>
 
 					<?php if ( $connected ) : ?>
-						<p class="verlo-sub"><?php esc_html_e( 'Your license is active. Disconnecting releases this site from your Verlo account so it can be connected elsewhere, and lets you enter a different license key here.', 'verlo' ); ?></p>
+						<?php if ( 'disabled' === Verlo_Auth::site_status() ) : ?>
+							<p class="verlo-sub"><?php echo wp_kses_post( sprintf(
+								/* translators: %s: dashboard sites URL */
+								__( 'This site is <strong>paused</strong> on Verlo — your plan covers fewer sites than you have connected. Re-enable it or upgrade in your <a href="%s" target="_blank" rel="noopener">Verlo dashboard</a>. Content generation is off until then.', 'verlo' ),
+								esc_url( Verlo_SaaS_Client::dashboard_url() . '/dashboard/sites' )
+							) ); ?></p>
+						<?php else : ?>
+							<p class="verlo-sub"><?php esc_html_e( 'Your license is active. Disconnecting releases this site from your Verlo account so it can be connected elsewhere, and lets you enter a different license key here.', 'verlo' ); ?></p>
+						<?php endif; ?>
 						<p class="verlo-meta" style="margin-bottom:12px;">
 							<?php
 							printf(
