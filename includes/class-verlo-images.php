@@ -15,10 +15,11 @@ class Verlo_Images {
 
 	/**
 	 * Images require an active connection (the search call goes through the
-	 * SaaS) — there's no per-site credential to check anymore.
+	 * SaaS) — there's no per-site credential to check anymore. Also false
+	 * when the site is paused on Verlo (plan covers fewer sites).
 	 */
 	public static function is_configured() {
-		return Verlo_Auth::is_connected();
+		return Verlo_Auth::is_active();
 	}
 
 	/**

@@ -25,6 +25,17 @@ class Verlo_SaaS_Client {
 	 * Handles 401 by attempting one token refresh + retry.
 	 */
 	public static function request_job( $type, $payload, $retry = true ) {
+		// Parked on Verlo's side (plan covers fewer sites than are connected):
+		// the backend would reject every job with a 403 anyway — fail fast
+		// here with a clear message instead of a round trip. Single choke
+		// point for all job types.
+		if ( 'disabled' === Verlo_Auth::site_status() ) {
+			return new WP_Error(
+				'verlo_site_paused',
+				__( 'This site is paused on Verlo because your plan covers fewer sites than you have connected. Re-enable it in your Verlo dashboard, or upgrade to cover more sites.', 'verlo' )
+			);
+		}
+
 		$token = Verlo_Auth::token();
 		if ( is_wp_error( $token ) ) { return $token; }
 

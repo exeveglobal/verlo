@@ -98,8 +98,14 @@ class Verlo_Auth {
 		// 'disabled' means the site is parked on Verlo's side because the
 		// account's plan covers fewer sites than are connected. The license
 		// is still valid; generation is refused until it's re-enabled from
-		// the Verlo dashboard (or the plan is upgraded).
-		update_option( self::OPT_SITE_STATUS, ( 'disabled' === ( $data['site_status'] ?? '' ) ) ? 'disabled' : 'active', 'no' );
+		// the Verlo dashboard (or the plan is upgraded). When the field is
+		// ABSENT (older backend, or a partial response), keep whatever we had
+		// rather than silently flipping a paused site back to 'active'.
+		if ( isset( $data['site_status'] ) ) {
+			update_option( self::OPT_SITE_STATUS, 'disabled' === $data['site_status'] ? 'disabled' : 'active', 'no' );
+		} elseif ( '' === (string) get_option( self::OPT_SITE_STATUS, '' ) ) {
+			update_option( self::OPT_SITE_STATUS, 'active', 'no' );
+		}
 
 		// Store license key encrypted at rest where possible (see
 		// encrypt_license_key() below). Purpose: auto-refresh when the token
@@ -233,7 +239,7 @@ class Verlo_Auth {
 		return 'disabled' === get_option( self::OPT_SITE_STATUS, 'active' ) ? 'disabled' : 'active';
 	}
 
-	/** True only when connected AND not parked on Verlo's side. */
+	/** True only when connected AND not parked on Verlo's side. Job submission is gated on this in Verlo_SaaS_Client. */
 	public static function is_active() {
 		return self::is_connected() && 'disabled' !== self::site_status();
 	}
@@ -257,19 +263,28 @@ class Verlo_Auth {
 	 * "Disconnect" handler BEFORE the local auth data is cleared — that local
 	 * clear happens regardless of what this returns.
 	 *
-	 * Returns true when the SaaS released the site (or there was nothing to
-	 * release), or a WP_Error describing why it did not:
-	 *   - 'verlo_free_plan_no_release' — the account is on Free; the site
-	 *     stays linked server-side (Free is one site for the life of the
-	 *     account). Not really a failure, just a no-op with a reason.
-	 *   - 'verlo_transport' / 'verlo_release_failed' — could not reach the
-	 *     server, or it returned an unexpected status.
+	 * Returns:
+	 *   - true          — the SaaS released the site (HTTP 200).
+	 *   - 'noop'         — there was nothing to release (no stored token).
+	 *   - WP_Error       — it did not release, with one of these codes:
+	 *       'verlo_free_plan_no_release' — account is on Free; the site stays
+	 *         linked server-side. Keyed off the server's error code, not a
+	 *         bare 403, so a revoked token / WAF / suspended account is not
+	 *         misreported as a plan problem.
+	 *       'verlo_transport' / 'verlo_release_failed' — could not reach the
+	 *         server, or it returned an unexpected status.
 	 */
 	public static function release_remote() {
-		$token = (string) get_option( self::OPT_TOKEN, '' );
-		if ( '' === $token ) {
-			// Never connected, or already cleared — nothing to release.
-			return true;
+		// Prefer a fresh token (token() auto-refreshes within an hour of
+		// expiry via the stored license key) so a rarely-logged-in admin
+		// disconnecting doesn't fail on a stale JWT. Fall back to whatever is
+		// stored if the refresh itself fails.
+		$token = self::token();
+		if ( is_wp_error( $token ) ) {
+			$token = (string) get_option( self::OPT_TOKEN, '' );
+		}
+		if ( '' === (string) $token ) {
+			return 'noop'; // never connected, or already cleared — nothing to release.
 		}
 
 		$url      = Verlo_SaaS_Client::base_url() . '/v1/auth/disconnect';
@@ -297,7 +312,16 @@ class Verlo_Auth {
 			return true;
 		}
 
-		if ( 403 === $code ) {
+		// 404 = this backend predates the release endpoint (rollout skew).
+		// Nothing to surface as an error — the local disconnect is enough.
+		if ( 404 === $code ) {
+			return 'noop';
+		}
+
+		// Free-plan case is keyed off the server's machine-readable code, not
+		// the bare 403 — a revoked token, WAF block, or suspended account
+		// also returns 403 and must not be reported as "you're on Free".
+		if ( 403 === $code && isset( $data['error'] ) && 'free_plan_no_release' === $data['error'] ) {
 			$msg = isset( $data['message'] )
 				? (string) $data['message']
 				: 'Moving a site to another Verlo account is available on paid plans.';

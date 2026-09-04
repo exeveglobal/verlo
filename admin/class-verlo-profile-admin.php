@@ -645,6 +645,11 @@ class Verlo_Profile_Admin {
 			self::redirect( __( 'Verlo disconnected. This site has been released from your account.', 'verlo' ) );
 		}
 
+		if ( 'noop' === $released ) {
+			// Nothing was linked server-side to release — don't claim otherwise.
+			self::redirect( __( 'Verlo disconnected.', 'verlo' ) );
+		}
+
 		if ( is_wp_error( $released ) && 'verlo_free_plan_no_release' === $released->get_error_code() ) {
 			self::redirect( sprintf(
 				/* translators: %s: reason returned by the Verlo server */

@@ -61,7 +61,8 @@ Verlo doesn't expose which AI provider or model it uses in any part of the plugi
 == Changelog ==
 
 = 1.1.35 =
-* Added a clear "paused" state for a site. If your Verlo plan covers fewer sites than you have connected (for example after a downgrade), the extra sites are paused rather than removed — all their history is kept. A paused site shows a notice in the Verlo admin and its content generation is off until you re-enable it from the Verlo dashboard or upgrade to cover more sites. Requires the matching verlo-saas backend update.
+* Added a clear "paused" state for a site. If your Verlo plan covers fewer sites than you have connected (for example after a downgrade), the extra sites are paused rather than removed — all their history is kept. A paused site shows a notice in the Verlo admin, and generating articles, briefs, topical maps and images is blocked with a clear message until you re-enable it from the Verlo dashboard or upgrade to cover more sites. Requires the matching verlo-saas backend update.
+* Hardening: the generation error panel now renders the server's message as plain text rather than HTML; Disconnect refreshes an expired connection token before releasing the site; and a "you're on the Free plan" disconnect message is only shown when the server actually says so.
 
 = 1.1.34 =
 * Disconnecting Verlo now releases the site from your Verlo account on the server too, not just locally — so the same site can be connected under a different Verlo account afterward (for example, handing a site over to a client). Your content stays in WordPress and the site's article history on Verlo is kept for if you reconnect. Releasing a site to another account requires a paid plan; on the Free plan, Disconnect still clears the connection here but the site stays linked to your account. Requires the matching verlo-saas backend update.
