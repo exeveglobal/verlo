@@ -776,7 +776,14 @@ class Verlo_Brief_Admin {
 				clearInterval(roll); clearInterval(timer); if(elapsedTick) clearInterval(elapsedTick);
 				var t = box.querySelector('.verlo-gen-title');
 				if(t){ t.textContent = I18N.generationFailed; }
-				if(msgEl){ msgEl.innerHTML = (msg || I18N.somethingWrong) + ' &nbsp;<a href="javascript:window.location.reload()">' + I18N.reload + '</a>'; }
+				if(msgEl){
+					// msg is a server-supplied string — set it as text, never HTML.
+					msgEl.textContent = (msg || I18N.somethingWrong) + '  ';
+					var rl = document.createElement('a');
+					rl.href = '#'; rl.textContent = I18N.reload;
+					rl.addEventListener('click', function(e){ e.preventDefault(); window.location.reload(); });
+					msgEl.appendChild(rl);
+				}
 				var sp = box.querySelector('.verlo-spinner');
 				if(sp){ sp.style.display = 'none'; }
 			}
