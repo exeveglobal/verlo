@@ -33,6 +33,12 @@ class Verlo_Generator {
 		if ( ! Verlo_Auth::is_connected() ) {
 			return new WP_Error( 'verlo_not_connected', 'Connect Verlo first under Strategy Profile → Verlo connection.' );
 		}
+		if ( ! Verlo_Auth::is_active() ) {
+			// Fails right here, before an async job dispatch is even queued —
+			// Verlo_SaaS_Client::request_job() would reject it anyway, but
+			// only after the loopback round trip.
+			return new WP_Error( 'verlo_site_paused', 'This site is paused on Verlo because your plan covers fewer sites than you have connected. Re-enable it in your Verlo dashboard, or upgrade to cover more sites.' );
+		}
 		if ( ! Verlo_Brief::get( $article_id ) ) {
 			return new WP_Error( 'verlo_no_brief', 'Generate a content brief for this article first.' );
 		}
@@ -321,6 +327,12 @@ class Verlo_Generator {
 		}
 		if ( ! Verlo_Auth::is_connected() ) {
 			return new WP_Error( 'verlo_not_connected', 'Connect Verlo first under Strategy Profile → Verlo connection.' );
+		}
+		if ( ! Verlo_Auth::is_active() ) {
+			// Fails right here, before an async job dispatch is even queued —
+			// Verlo_SaaS_Client::request_job() would reject it anyway, but
+			// only after the loopback round trip.
+			return new WP_Error( 'verlo_site_paused', 'This site is paused on Verlo because your plan covers fewer sites than you have connected. Re-enable it in your Verlo dashboard, or upgrade to cover more sites.' );
 		}
 		$brief = Verlo_Brief::get( $article_id );
 		if ( ! $brief ) {
