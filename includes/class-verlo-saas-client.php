@@ -25,6 +25,30 @@ class Verlo_SaaS_Client {
 	 * Handles 401 by attempting one token refresh + retry.
 	 */
 	public static function request_job( $type, $payload, $retry = true ) {
+		// Parked on Verlo's side (plan covers fewer sites than are connected):
+		// the backend would reject every job with a 403 anyway — fail fast
+		// here with a clear message instead of a round trip. Single choke
+		// point for all job types.
+		//
+		// site_status() reads a locally cached option that's only otherwise
+		// refreshed within an hour of the 7-day token expiry — if we trusted
+		// that cache alone, a site the customer re-enabled (or upgraded)
+		// server-side minutes ago would stay wrongly blocked here for up to
+		// a week, since this check would keep returning before token() ever
+		// gets a chance to refresh it. Force a live re-check first so a
+		// genuinely-fixed site un-blocks immediately instead of waiting on
+		// that window.
+		if ( 'disabled' === Verlo_Auth::site_status() ) {
+			$refreshed = Verlo_Auth::refresh();
+			if ( is_wp_error( $refreshed ) || 'disabled' === Verlo_Auth::site_status() ) {
+				return new WP_Error(
+					'verlo_site_paused',
+					__( 'This site is paused on Verlo because your plan covers fewer sites than you have connected. Re-enable it in your Verlo dashboard, or upgrade to cover more sites.', 'verlo' )
+				);
+			}
+			// Refresh found the site active again — fall through and submit.
+		}
+
 		$token = Verlo_Auth::token();
 		if ( is_wp_error( $token ) ) { return $token; }
 

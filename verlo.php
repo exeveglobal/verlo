@@ -3,7 +3,7 @@
  * Plugin Name:       Verlo
  * Plugin URI:        https://exeve.global/
  * Description:       Verlo plans, writes, and optimizes SEO content for your site, end to end. It builds a knowledge graph of your existing content, designs a topical map of pillars and planned articles, turns each into a content brief, and generates publish-ready, human-quality draft articles, complete with on-page SEO, internal links, and stock images, for your review before publishing.
- * Version:           1.1.33
+ * Version:           1.1.35
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            EXEVE
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'VERLO_VERSION', '1.1.33' );
+define( 'VERLO_VERSION', '1.1.35' );
 define( 'VERLO_FILE', __FILE__ );
 define( 'VERLO_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VERLO_URL', plugin_dir_url( __FILE__ ) );
@@ -254,6 +254,7 @@ function verlo_boot() {
 		add_action( 'current_screen', 'verlo_env_admin_check' );
 		add_action( 'admin_notices', 'verlo_env_admin_notice' );
 		add_action( 'admin_notices', 'verlo_connect_admin_notice' );
+		add_action( 'admin_notices', 'verlo_paused_admin_notice' );
 	}
 }
 add_action( 'plugins_loaded', 'verlo_boot' );
@@ -307,6 +308,25 @@ function verlo_connect_admin_notice() {
 	echo '<div class="notice notice-warning"><p><strong>Verlo is not connected.</strong> '
 		. 'Connect your license to enable topical map, content brief, and article generation. '
 		. '<a href="' . esc_url( $connect_url ) . '" class="button button-small">Connect Verlo</a></p></div>';
+}
+
+/**
+ * Shown when the site is connected but PARKED on Verlo's side — the account's
+ * plan covers fewer sites than are connected. Generation is refused until
+ * it's re-enabled from the Verlo dashboard (or the plan is upgraded).
+ */
+function verlo_paused_admin_notice() {
+	if ( ! current_user_can( 'manage_options' ) ) { return; }
+	$screen = get_current_screen();
+	if ( ! $screen || false === strpos( (string) $screen->id, 'verlo' ) ) { return; }
+
+	if ( ! Verlo_Auth::is_connected() || 'disabled' !== Verlo_Auth::site_status() ) { return; }
+
+	$dashboard_url = Verlo_SaaS_Client::dashboard_url() . '/dashboard/sites';
+	echo '<div class="notice notice-warning"><p><strong>This site is paused on Verlo.</strong> '
+		. 'Your Verlo plan covers fewer sites than you have connected, so content generation is off for this site. '
+		. 'Re-enable it (or upgrade to cover more sites) in your Verlo dashboard. '
+		. '<a href="' . esc_url( $dashboard_url ) . '" class="button button-small" target="_blank" rel="noopener">Manage sites</a></p></div>';
 }
 
 /**

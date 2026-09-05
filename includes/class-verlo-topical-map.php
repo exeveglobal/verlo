@@ -77,6 +77,9 @@ class Verlo_Topical_Map {
 			if ( ! Verlo_Auth::is_connected() ) {
 				return new WP_Error( 'verlo_not_connected', 'Connect Verlo first under Strategy Profile → Verlo connection.' );
 			}
+			if ( ! Verlo_Auth::is_active() ) {
+				return new WP_Error( 'verlo_site_paused', 'This site is paused on Verlo because your plan covers fewer sites than you have connected. Re-enable it in your Verlo dashboard, or upgrade to cover more sites.' );
+			}
 			if ( ! Verlo_Profile::is_complete() ) {
 				return new WP_Error( 'verlo_profile_incomplete', 'Complete the Strategy Profile first (niche, audience, voice).' );
 			}

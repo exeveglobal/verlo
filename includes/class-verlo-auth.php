@@ -13,12 +13,13 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 class Verlo_Auth {
 
-	const OPT_TOKEN      = 'verlo_saas_token';
-	const OPT_SITE_ID    = 'verlo_saas_site_id';
-	const OPT_PLAN       = 'verlo_saas_plan';
-	const OPT_FEATURES   = 'verlo_saas_features';
-	const OPT_EXPIRES_AT = 'verlo_saas_expires_at';
-	const OPT_LK         = 'verlo_license_key'; // stored for auto-refresh on token expiry
+	const OPT_TOKEN       = 'verlo_saas_token';
+	const OPT_SITE_ID     = 'verlo_saas_site_id';
+	const OPT_PLAN        = 'verlo_saas_plan';
+	const OPT_FEATURES    = 'verlo_saas_features';
+	const OPT_EXPIRES_AT  = 'verlo_saas_expires_at';
+	const OPT_SITE_STATUS = 'verlo_saas_site_status'; // 'active' | 'disabled' (parked on Verlo's side)
+	const OPT_LK          = 'verlo_license_key'; // stored for auto-refresh on token expiry
 
 	/**
 	 * Get the current JWT token. Auto-refreshes if within 1 hour of expiry.
@@ -94,6 +95,17 @@ class Verlo_Auth {
 		update_option( self::OPT_PLAN,       $data['plan'],                        'no' );
 		update_option( self::OPT_FEATURES,   $data['features'] ?? array(),         'no' );
 		update_option( self::OPT_EXPIRES_AT, strtotime( $data['expires_at'] ?? '' ) ?: 0, 'no' );
+		// 'disabled' means the site is parked on Verlo's side because the
+		// account's plan covers fewer sites than are connected. The license
+		// is still valid; generation is refused until it's re-enabled from
+		// the Verlo dashboard (or the plan is upgraded). When the field is
+		// ABSENT (older backend, or a partial response), keep whatever we had
+		// rather than silently flipping a paused site back to 'active'.
+		if ( isset( $data['site_status'] ) ) {
+			update_option( self::OPT_SITE_STATUS, 'disabled' === $data['site_status'] ? 'disabled' : 'active', 'no' );
+		} elseif ( '' === (string) get_option( self::OPT_SITE_STATUS, '' ) ) {
+			update_option( self::OPT_SITE_STATUS, 'active', 'no' );
+		}
 
 		// Store license key encrypted at rest where possible (see
 		// encrypt_license_key() below). Purpose: auto-refresh when the token
@@ -222,6 +234,16 @@ class Verlo_Auth {
 		return (string) get_option( self::OPT_SITE_ID, '' );
 	}
 
+	/** 'active' or 'disabled' — 'disabled' = parked on Verlo (plan covers fewer sites). */
+	public static function site_status() {
+		return 'disabled' === get_option( self::OPT_SITE_STATUS, 'active' ) ? 'disabled' : 'active';
+	}
+
+	/** True only when connected AND not parked on Verlo's side. Job submission is gated on this in Verlo_SaaS_Client. */
+	public static function is_active() {
+		return self::is_connected() && 'disabled' !== self::site_status();
+	}
+
 	public static function plan() {
 		return (string) get_option( self::OPT_PLAN, 'free' );
 	}
@@ -235,6 +257,81 @@ class Verlo_Auth {
 		return in_array( $feature, self::features(), true );
 	}
 
+	/**
+	 * Best-effort release of this site on the Verlo SaaS side, so the same
+	 * URL can be connected under a different account. Called from the admin
+	 * "Disconnect" handler BEFORE the local auth data is cleared — that local
+	 * clear happens regardless of what this returns.
+	 *
+	 * Returns:
+	 *   - true          — the SaaS released the site (HTTP 200).
+	 *   - 'noop'         — there was nothing to release (no stored token).
+	 *   - WP_Error       — it did not release, with one of these codes:
+	 *       'verlo_free_plan_no_release' — account is on Free; the site stays
+	 *         linked server-side. Keyed off the server's error code, not a
+	 *         bare 403, so a revoked token / WAF / suspended account is not
+	 *         misreported as a plan problem.
+	 *       'verlo_transport' / 'verlo_release_failed' — could not reach the
+	 *         server, or it returned an unexpected status.
+	 */
+	public static function release_remote() {
+		// Prefer a fresh token (token() auto-refreshes within an hour of
+		// expiry via the stored license key) so a rarely-logged-in admin
+		// disconnecting doesn't fail on a stale JWT. Fall back to whatever is
+		// stored if the refresh itself fails.
+		$token = self::token();
+		if ( is_wp_error( $token ) ) {
+			$token = (string) get_option( self::OPT_TOKEN, '' );
+		}
+		if ( '' === (string) $token ) {
+			return 'noop'; // never connected, or already cleared — nothing to release.
+		}
+
+		$url      = Verlo_SaaS_Client::base_url() . '/v1/auth/disconnect';
+		$response = wp_remote_post( $url, array(
+			'timeout' => 15,
+			'headers' => array(
+				'Content-Type'  => 'application/json',
+				'Authorization' => 'Bearer ' . $token,
+			),
+			'body'    => wp_json_encode( array( 'source' => 'plugin' ) ),
+		) );
+
+		if ( is_wp_error( $response ) ) {
+			return new WP_Error(
+				'verlo_transport',
+				'Could not reach the Verlo server to release this site: ' . $response->get_error_message()
+			);
+		}
+
+		$code = (int) wp_remote_retrieve_response_code( $response );
+		$data = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( 200 === $code ) {
+			Verlo_Log::info( 'auth.released', 'Site released on Verlo' );
+			return true;
+		}
+
+		// 404 = this backend predates the release endpoint (rollout skew).
+		// Nothing to surface as an error — the local disconnect is enough.
+		if ( 404 === $code ) {
+			return 'noop';
+		}
+
+		// Free-plan case is keyed off the server's machine-readable code, not
+		// the bare 403 — a revoked token, WAF block, or suspended account
+		// also returns 403 and must not be reported as "you're on Free".
+		if ( 403 === $code && isset( $data['error'] ) && 'free_plan_no_release' === $data['error'] ) {
+			$msg = isset( $data['message'] )
+				? (string) $data['message']
+				: 'Moving a site to another Verlo account is available on paid plans.';
+			return new WP_Error( 'verlo_free_plan_no_release', $msg );
+		}
+
+		$msg = isset( $data['message'] ) ? (string) $data['message'] : ( 'Verlo server returned HTTP ' . $code . '.' );
+		return new WP_Error( 'verlo_release_failed', $msg );
+	}
+
 	/** Clear all auth data (user-initiated disconnect). */
 	public static function disconnect() {
 		delete_option( self::OPT_TOKEN );
@@ -242,6 +339,7 @@ class Verlo_Auth {
 		delete_option( self::OPT_PLAN );
 		delete_option( self::OPT_FEATURES );
 		delete_option( self::OPT_EXPIRES_AT );
+		delete_option( self::OPT_SITE_STATUS );
 		delete_option( self::OPT_LK );
 		Verlo_Log::info( 'auth.disconnected', 'Verlo disconnected' );
 	}
