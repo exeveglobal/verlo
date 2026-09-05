@@ -651,11 +651,14 @@ class Verlo_Profile_Admin {
 		}
 
 		if ( is_wp_error( $released ) && 'verlo_free_plan_no_release' === $released->get_error_code() ) {
+			// Flagged, not the plain success banner: the release specifically
+			// did NOT happen (the site is still linked to this account) —
+			// showing it identically to a real success would read as if it did.
 			self::redirect( sprintf(
 				/* translators: %s: reason returned by the Verlo server */
 				__( 'Disconnected here. Your site stays linked to your Verlo account — %s', 'verlo' ),
 				$released->get_error_message()
-			) );
+			), true );
 		}
 
 		// Transport error or an unexpected server response — the local
