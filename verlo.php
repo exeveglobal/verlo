@@ -3,7 +3,7 @@
  * Plugin Name:       Verlo
  * Plugin URI:        https://exeve.global/
  * Description:       Verlo plans, writes, and optimizes SEO content for your site, end to end. It builds a knowledge graph of your existing content, designs a topical map of pillars and planned articles, turns each into a content brief, and generates publish-ready, human-quality draft articles, complete with on-page SEO, internal links, and stock images, for your review before publishing.
- * Version:           1.1.35
+ * Version:           1.1.36
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            EXEVE
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'VERLO_VERSION', '1.1.35' );
+define( 'VERLO_VERSION', '1.1.36' );
 define( 'VERLO_FILE', __FILE__ );
 define( 'VERLO_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VERLO_URL', plugin_dir_url( __FILE__ ) );
@@ -57,6 +57,7 @@ require_once VERLO_DIR . 'includes/class-verlo-faq-schema.php';
 require_once VERLO_DIR . 'includes/class-verlo-generator.php';
 require_once VERLO_DIR . 'includes/class-verlo-async-job.php';
 require_once VERLO_DIR . 'includes/class-verlo-images.php';
+require_once VERLO_DIR . 'includes/class-verlo-content-styles.php';
 
 // admin/*.php (~180KB) is only ever used from verlo_boot()'s own is_admin()
 // block below - was previously require_once'd unconditionally, meaning it
@@ -219,6 +220,7 @@ function verlo_boot() {
 	verlo_maybe_upgrade();
 	Verlo_Knowledge_Graph::init();   // incremental index hooks
 	Verlo_Rebuild::init();           // cron continuation handler
+	Verlo_Content_Styles::init();    // front-end fallback CSS for generated tables/quotes
 
 	// Background article generation: the loopback worker (admin-post, incl.
 	// no-priv since the loopback carries no cookie) and the WP-Cron fallback.
