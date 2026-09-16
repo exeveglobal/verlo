@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.35
+Stable tag: 1.1.36
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,9 @@ Yes, but a key is only active on one site at a time. Remove it from the current 
 Verlo doesn't expose which AI provider or model it uses in any part of the plugin, its output, or its support channels — this is intentional and not configurable.
 
 == Changelog ==
+
+= 1.1.36 =
+* Generated tables and pull quotes now always render with legible baseline styling (borders, header shading, a quote indent), even on themes that don't style WordPress's own table/quote blocks. Previously these depended entirely on the active theme; a minimal or custom theme could leave them looking structurally broken. This only ever fills a gap — a theme that already styles them keeps its own look untouched.
 
 = 1.1.35 =
 * Added a clear "paused" state for a site. If your Verlo plan covers fewer sites than you have connected (for example after a downgrade), the extra sites are paused rather than removed — all their history is kept. A paused site shows a notice in the Verlo admin, and generating articles, briefs, topical maps and images is blocked with a clear message until you re-enable it from the Verlo dashboard or upgrade to cover more sites. Requires the matching verlo-saas backend update.
