@@ -4,7 +4,7 @@ Tags: seo, content generation, ai writer, topical map, content strategy
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.37
+Stable tag: 1.1.38
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,9 @@ Yes, but a key is only active on one site at a time. Remove it from the current 
 Verlo doesn't expose which AI provider or model it uses in any part of the plugin, its output, or its support channels — this is intentional and not configurable.
 
 == Changelog ==
+
+= 1.1.38 =
+* The Disconnect button is now only shown on paid plans, where it actually works. Free (one site for the life of the account) now shows a clear explanation and an upgrade link instead of a button that would just fail.
 
 = 1.1.37 =
 * You can now see what a generation actually costs, right where you generate it. Before writing a brief or an article, the page shows how many free slots/credits you have left; once it's done, it shows your new standing. Requires the matching verlo-saas backend update.
