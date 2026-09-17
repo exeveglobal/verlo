@@ -294,6 +294,58 @@ class Verlo_SaaS_Client {
 	}
 
 	/**
+	 * Read-only article credit status for this site — same pattern and same
+	 * "never block the real action" guarantee as topical_map_limits() above,
+	 * just for the plan's article credit pool instead of topical-map free
+	 * regenerations. Used both BEFORE generating (show "X of Y credits
+	 * left") and again right after a generation completes (show what it
+	 * just cost) — see class-verlo-brief-admin.php. Returns
+	 * [ 'included', 'used', 'remaining', 'reset' ] ('reset' is 'monthly' or
+	 * 'lifetime' — Free's pool never resets) or null on any failure.
+	 */
+	public static function article_limits() {
+		$token = Verlo_Auth::token();
+		if ( is_wp_error( $token ) ) { return null; }
+
+		$url      = self::base_url() . '/v1/jobs/article/limits';
+		$response = wp_remote_get( $url, array(
+			'timeout' => 10,
+			'headers' => array( 'Authorization' => 'Bearer ' . $token ),
+		) );
+
+		if ( is_wp_error( $response ) ) { return null; }
+		if ( 200 !== (int) wp_remote_retrieve_response_code( $response ) ) { return null; }
+
+		$data = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( ! is_array( $data ) || ! isset( $data['included'] ) ) { return null; }
+		return $data;
+	}
+
+	/**
+	 * Read-only content-brief cap status for this site. Briefs are free —
+	 * capped on unconverted count, not credits — so this is a separate,
+	 * smaller shape than article_limits() above: [ 'cap', 'used',
+	 * 'remaining' ], or null on any failure.
+	 */
+	public static function brief_limits() {
+		$token = Verlo_Auth::token();
+		if ( is_wp_error( $token ) ) { return null; }
+
+		$url      = self::base_url() . '/v1/jobs/brief/limits';
+		$response = wp_remote_get( $url, array(
+			'timeout' => 10,
+			'headers' => array( 'Authorization' => 'Bearer ' . $token ),
+		) );
+
+		if ( is_wp_error( $response ) ) { return null; }
+		if ( 200 !== (int) wp_remote_retrieve_response_code( $response ) ) { return null; }
+
+		$data = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( ! is_array( $data ) || ! isset( $data['cap'] ) ) { return null; }
+		return $data;
+	}
+
+	/**
 	 * Base URL for all SaaS requests.
 	 * Override via VERLO_SAAS_URL constant (for local dev) or settings.
 	 */
