@@ -399,12 +399,25 @@ class Verlo_Profile_Admin {
 					</h2>
 
 					<?php if ( $connected ) : ?>
+						<?php
+						// Disconnect is paid-only (SaaS 403s a Free caller with
+						// free_plan_no_release — see class-verlo-auth.php's
+						// release_remote() and the spec's Piece 1 decision record).
+						// A Free plan used to still see a live-looking "Disconnect"
+						// button that just 403'd on click; showing the real reason
+						// up front instead is a straight readability improvement,
+						// not a new restriction — nothing about what Free can and
+						// can't do has changed.
+						$is_free = 'free' === Verlo_Auth::plan();
+						?>
 						<?php if ( 'disabled' === Verlo_Auth::site_status() ) : ?>
 							<p class="verlo-sub"><?php echo wp_kses_post( sprintf(
 								/* translators: %s: dashboard sites URL */
 								__( 'This site is <strong>paused</strong> on Verlo — your plan covers fewer sites than you have connected. Re-enable it or upgrade in your <a href="%s" target="_blank" rel="noopener">Verlo dashboard</a>. Content generation is off until then.', 'verlo' ),
 								esc_url( Verlo_SaaS_Client::dashboard_url() . '/dashboard/sites' )
 							) ); ?></p>
+						<?php elseif ( $is_free ) : ?>
+							<p class="verlo-sub"><?php esc_html_e( 'Your license is active.', 'verlo' ); ?></p>
 						<?php else : ?>
 							<p class="verlo-sub"><?php esc_html_e( 'Your license is active. Disconnecting releases this site from your Verlo account so it can be connected elsewhere, and lets you enter a different license key here.', 'verlo' ); ?></p>
 						<?php endif; ?>
@@ -417,11 +430,21 @@ class Verlo_Profile_Admin {
 							);
 							?>
 						</p>
-						<form method="post" action="<?php echo esc_url( $url ); ?>">
-							<input type="hidden" name="action" value="verlo_disconnect" />
-							<?php wp_nonce_field( 'verlo_disconnect' ); ?>
-							<button type="submit" class="button button-secondary" onclick="return confirm('<?php echo esc_js( __( 'Disconnect Verlo? This releases the site from your Verlo account so it can be connected elsewhere. Your content stays in WordPress and your article history on Verlo is kept for when you reconnect. Content generation stops until you reconnect.', 'verlo' ) ); ?>');"><?php esc_html_e( 'Disconnect', 'verlo' ); ?></button>
-						</form>
+						<?php if ( $is_free ) : ?>
+							<p class="verlo-sub">
+								<?php echo wp_kses_post( sprintf(
+									/* translators: %s: dashboard billing URL */
+									__( 'Moving a site to another account needs a paid plan. <a href="%s" target="_blank" rel="noopener">Upgrade in your Verlo dashboard</a> to unlock it.', 'verlo' ),
+									esc_url( Verlo_SaaS_Client::dashboard_url() . '/dashboard/billing' )
+								) ); ?>
+							</p>
+						<?php else : ?>
+							<form method="post" action="<?php echo esc_url( $url ); ?>">
+								<input type="hidden" name="action" value="verlo_disconnect" />
+								<?php wp_nonce_field( 'verlo_disconnect' ); ?>
+								<button type="submit" class="button button-secondary" onclick="return confirm('<?php echo esc_js( __( 'Disconnect Verlo? This releases the site from your Verlo account so it can be connected elsewhere. Your content stays in WordPress and your article history on Verlo is kept for when you reconnect. Content generation stops until you reconnect.', 'verlo' ) ); ?>');"><?php esc_html_e( 'Disconnect', 'verlo' ); ?></button>
+							</form>
+						<?php endif; ?>
 					<?php else : ?>
 						<div data-verlo-tour-target="connect"<?php echo Verlo_Guided_Tour::target_id_attr( 'connect' ); ?>>
 						<p class="verlo-sub"><?php esc_html_e( 'Connect your Verlo account — no need to find and paste a license key.', 'verlo' ); ?></p>
