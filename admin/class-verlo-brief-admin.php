@@ -142,6 +142,7 @@ class Verlo_Brief_Admin {
 		$stats     = Verlo_Strategist::stats();
 		$next      = Verlo_Strategist::pick_next();
 		$connected = Verlo_Auth::is_connected();
+		$brief_cap = $connected ? Verlo_SaaS_Client::brief_limits() : null;
 		?>
 		<div class="verlo-card" style="margin-top:14px;">
 			<h2><?php esc_html_e( 'Overview', 'verlo' ); ?></h2>
@@ -156,6 +157,30 @@ class Verlo_Brief_Admin {
 				);
 				?>
 			</p>
+			<?php if ( $brief_cap ) : ?>
+				<p class="verlo-sub" style="margin-top:-8px;">
+					<?php if ( (int) $brief_cap['remaining'] > 0 ) : ?>
+						<?php
+						printf(
+							/* translators: 1: unconverted brief slots remaining, 2: total slots */
+							esc_html__( 'Briefs are free. %1$d of %2$d unconverted slots left — generate an article from a brief to free a slot.', 'verlo' ),
+							(int) $brief_cap['remaining'],
+							(int) $brief_cap['cap']
+						);
+						?>
+					<?php else : ?>
+						<span style="color:#9a6700;">
+							<?php
+							printf(
+								/* translators: %d: unconverted-brief cap */
+								esc_html__( "You've reached the %d-brief cap. Generate an article from an existing brief to free a slot before requesting more.", 'verlo' ),
+								(int) $brief_cap['cap']
+							);
+							?>
+						</span>
+					<?php endif; ?>
+				</p>
+			<?php endif; ?>
 			<div class="verlo-actions">
 				<form method="post" action="<?php echo esc_url( $url ); ?>" style="display:inline">
 					<input type="hidden" name="action" value="verlo_brief_generate_next" />
@@ -476,6 +501,18 @@ class Verlo_Brief_Admin {
 		$back      = admin_url( 'admin.php?page=verlo-briefs' );
 		$next      = Verlo_Strategist::pick_next();
 		$connected = Verlo_Auth::is_connected();
+		// Fetched once, reused both before generating (pre-flight, "X of Y
+		// left") and after (post-completion, current standing) — the page
+		// reloads once generation finishes (see the polling JS below), so
+		// this single per-render fetch already reflects a just-completed
+		// generation's fresh debit without a second round trip.
+		$credits   = $connected ? Verlo_SaaS_Client::article_limits() : null;
+		// This page is exactly where a brief-generation redirect lands
+		// (handle_generate_next()'s success redirect opens the new brief's
+		// own detail page, not the overview list) — so the cap status needs
+		// to live here too, not just on render_list(), for it to actually
+		// be visible right after generating a brief.
+		$brief_cap = $connected ? Verlo_SaaS_Client::brief_limits() : null;
 		?>
 		<p style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
 			<a href="<?php echo esc_url( $back ); ?>">← <?php esc_html_e( 'All briefs', 'verlo' ); ?></a>
@@ -500,6 +537,15 @@ class Verlo_Brief_Admin {
 						/* translators: %s: human-readable time since generated */
 						esc_html__( 'generated %s ago', 'verlo' ),
 						esc_html( human_time_diff( (int) $b['meta']['generated_at'], time() ) )
+					);
+				}
+				if ( $brief_cap ) {
+					echo ' · ';
+					printf(
+						/* translators: 1: unconverted brief slots remaining, 2: total slots */
+						esc_html__( 'briefs are free — %1$d of %2$d unconverted slots left', 'verlo' ),
+						(int) $brief_cap['remaining'],
+						(int) $brief_cap['cap']
 					);
 				}
 				?>
@@ -564,6 +610,15 @@ class Verlo_Brief_Admin {
 									esc_html( $human )
 								);
 							}
+							if ( $credits ) {
+								printf(
+									/* translators: 1: article credits remaining, 2: total included, 3: "this month" or "lifetime" */
+									'<span style="margin-left:8px;color:#646970;font-size:12px;">' . esc_html__( '%1$d of %2$d article credits left (%3$s)', 'verlo' ) . '</span>',
+									(int) $credits['remaining'],
+									(int) $credits['included'],
+									'lifetime' === $credits['reset'] ? esc_html__( 'lifetime', 'verlo' ) : esc_html__( 'this month', 'verlo' )
+								);
+							}
 							?>
 							</div>
 						</div>
@@ -597,6 +652,25 @@ class Verlo_Brief_Admin {
 							);
 							?>
 						</div>
+						<?php if ( $credits ) : ?>
+							<div class="description" style="margin-top:4px;">
+								<?php if ( (int) $credits['remaining'] > 0 ) : ?>
+									<?php
+									printf(
+										/* translators: 1: article credits remaining, 2: total included, 3: "this month" or "lifetime" */
+										esc_html__( '%1$d of %2$d article credits left (%3$s).', 'verlo' ),
+										(int) $credits['remaining'],
+										(int) $credits['included'],
+										'lifetime' === $credits['reset'] ? esc_html__( 'lifetime', 'verlo' ) : esc_html__( 'this month', 'verlo' )
+									);
+									?>
+								<?php else : ?>
+									<span style="color:#9a6700;">
+										<?php esc_html_e( "You've used all your included article credits. This one will charge your Verlo wallet instead.", 'verlo' ); ?>
+									</span>
+								<?php endif; ?>
+							</div>
+						<?php endif; ?>
 					</div>
 					<form method="post" action="<?php echo esc_url( $url ); ?>" style="margin:0;" data-verlo-confirm-unsaved="1">
 						<input type="hidden" name="action" value="verlo_brief_generate_article" />
