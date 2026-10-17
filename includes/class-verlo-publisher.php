@@ -60,11 +60,48 @@ class Verlo_Publisher {
 
 		self::apply_seo_meta( $id, $title, isset( $a['meta_description'] ) ? (string) $a['meta_description'] : '', isset( $a['focus_keyword'] ) ? (string) $a['focus_keyword'] : '' );
 
+		if ( ! empty( $a['image'] ) && is_array( $a['image'] ) ) {
+			self::set_featured_image( $id, $a['image'], $title );
+		}
+
 		if ( ! empty( $dest['config']['category'] ) && is_string( $dest['config']['category'] ) ) {
 			self::set_category( $id, $dest['config']['category'] );
 		}
 
 		return self::result( $id );
+	}
+
+	/**
+	 * Adds the hero image to the media library and makes it the featured image, with its alt text and credit. Only
+	 * Pexels photo addresses are accepted, over https, so a delivery cannot make this site fetch an arbitrary URL.
+	 * A failure here never stops the article from being published; the post just has no image.
+	 */
+	protected static function set_featured_image( $post_id, $image, $title ) {
+		$url = isset( $image['url'] ) ? (string) $image['url'] : '';
+		if ( ! preg_match( '#^https://images\.pexels\.com/photos/\d+/[A-Za-z0-9._%/\-]+(\?[A-Za-z0-9=&._%\-]*)?$#', $url ) ) { return; }
+		$alt    = sanitize_text_field( isset( $image['alt'] ) ? (string) $image['alt'] : $title );
+		$credit = sanitize_text_field( isset( $image['credit'] ) ? (string) $image['credit'] : 'Photo from Pexels' );
+
+		// Same image already attached to this post: nothing to do (updates must not pile up copies).
+		if ( get_post_meta( $post_id, '_verlo_image_url', true ) === $url && has_post_thumbnail( $post_id ) ) { return; }
+
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/media.php';
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+
+		$tmp = download_url( $url, 20 );
+		if ( is_wp_error( $tmp ) ) { return; }
+		$name = sanitize_file_name( wp_basename( wp_parse_url( $url, PHP_URL_PATH ) ) );
+		if ( '' === $name || ! preg_match( '/\.(jpe?g|png|webp)$/i', $name ) ) { $name = 'verlo-' . $post_id . '.jpeg'; }
+		$check = wp_check_filetype_and_ext( $tmp, $name );
+		if ( empty( $check['type'] ) || 0 !== strpos( $check['type'], 'image/' ) ) { @unlink( $tmp ); return; }
+
+		$att = media_handle_sideload( array( 'name' => $name, 'tmp_name' => $tmp ), $post_id, $alt );
+		if ( is_wp_error( $att ) ) { @unlink( $tmp ); return; }
+		update_post_meta( $att, '_wp_attachment_image_alt', $alt );
+		wp_update_post( array( 'ID' => $att, 'post_excerpt' => $credit ) ); // shown as the caption
+		set_post_thumbnail( $post_id, $att );
+		update_post_meta( $post_id, '_verlo_image_url', $url );
 	}
 
 	protected static function result( $post_id ) {

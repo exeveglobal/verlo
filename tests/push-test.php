@@ -80,4 +80,10 @@ $payload2 = $payload; $payload2['article']['id'] = 'art-2'; $payload2['article']
 $r = req( 'publish', $payload2, $key, array( 'X-Verlo-Idempotency-Key' => 'art-2:v1:create' ) );
 $ok( 'publish mode goes live', 200 === $r->get_status() && 'publish' === get_post_status( (int) $r->get_data()['external_id'] ) );
 
+// 8. hero image: only Pexels addresses are ever fetched; a bad address is ignored and the post still publishes
+$payload3 = $payload; $payload3['article']['id'] = 'art-3'; $payload3['article']['external_id'] = null;
+$payload3['article']['image'] = array( 'url' => 'https://evil.example/photos/1/x.jpeg', 'alt' => 'x', 'credit' => 'Photo by A on Pexels', 'credit_url' => 'https://www.pexels.com' );
+$r = req( 'publish', $payload3, $key, array( 'X-Verlo-Idempotency-Key' => 'art-3:v1:create' ) );
+$ok( 'a non-Pexels image address is ignored, article still published', 200 === $r->get_status() && ! has_post_thumbnail( (int) $r->get_data()['external_id'] ) );
+
 echo implode( "\n", $out ) . "\n";
