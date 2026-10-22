@@ -1,43 +1,30 @@
-# Verlo
+# Verlo (WordPress plugin)
 
-Verlo is a WordPress plugin that plans, writes, and optimizes SEO content for your site, end to end. It builds a knowledge graph of your existing content, designs a topical map of pillars and planned articles, turns each into a content brief, and generates publish-ready draft articles, complete with on-page SEO, internal links, and stock images, for your review before publishing.
+Verlo plans, writes and edits SEO articles at app.verlohub.com. This plugin is the publisher: it receives finished, approved articles and creates or updates the matching post, with native blocks, SEO fields and FAQ structured data.
 
 By [EXEVE](https://exeve.global/).
 
-## How it works
+## How articles arrive
 
-Verlo is a thin client. All AI intelligence lives in the Verlo SaaS, a separate service this plugin talks to over a job API. The plugin itself never calls an AI model directly.
+Both ways are signed with the site's connection key (HMAC-SHA256 over `<timestamp>.<body>`, five minute window, constant-time check).
+
+- **Push:** Verlo calls `POST /wp-json/verlo/v1/publish` (and `/ping`).
+- **Pull:** the site asks Verlo for waiting articles every five minutes (`GET /v1/connect/pending`) and reports each result (`POST /v1/connect/result`). Works anywhere the site can reach the internet.
+
+The same article always maps to the same post (`_verlo_article_id`), so an update changes that post and a repeated delivery changes nothing.
+
+## Setup
+
+1. Install and activate.
+2. Settings, Verlo: paste the connection ID and key from the project's Connection tab in Verlo.
+3. Send test.
+
+## Testing
+
+`tests/push-test.php` runs through WordPress's real REST stack with WP-CLI and checks publish, update in place, idempotency, deleted posts, SEO fields, FAQ data and every rejection path:
 
 ```
-WordPress site  --(reads)-->  Plugin  --(jobs)-->  Verlo SaaS  --(AI)-->  model
-WordPress site  <-(applies)-- Plugin  <-(results)- Verlo SaaS
+wp eval-file tests/push-test.php
 ```
 
-The pipeline: **Knowledge Graph** (crawl existing content) -> **Strategy Profile** (site niche, audience, voice) -> **Topical Map** (pillars and planned articles) -> **Content Briefs** (outline, intent, internal links) -> **Article Generation** (draft with SEO meta and images).
-
-Every generated post is created as a draft. Nothing publishes automatically.
-
-## Requirements
-
-- WordPress 6.0+
-- PHP 7.4+
-- A Verlo license key (connects the plugin to the SaaS backend)
-
-## Getting started
-
-1. Install and activate the plugin.
-2. Go to Verlo -> Strategy Profile and connect with your license key.
-3. Fill in your site's niche, audience, and voice (or let Verlo infer it from existing content).
-4. Generate a topical map, approve it, then generate briefs and articles from there.
-
-## Development
-
-No build step. Plain PHP/JS/CSS following WordPress coding conventions.
-
-- Lint any changed PHP file: `php -l path/to/file.php`
-- Bump the version in both the plugin header and the `VERLO_VERSION` constant in `verlo.php`
-- All identifiers are prefixed `Verlo_` / `VERLO_` / `verlo_`
-
-## License
-
-GPL-2.0-or-later
+PHP syntax is linted in CI. The release workflow zips the plugin without `tests/`.
