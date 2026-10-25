@@ -10,13 +10,36 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 class Verlo_Faq_Schema {
 
+	const META_KEY = '_verlo_faq_jsonld';
+
+	public static function init() {
+		add_action( 'wp_head', array( __CLASS__, 'output' ), 30 );
+	}
+
+	/**
+	 * Prints the FAQ structured data in the page head. It used to be a <script> block inside the post body, but
+	 * WordPress strips scripts from content saved by a request that is not an administrator's (which is exactly how
+	 * Verlo delivers), and what was left behind was the raw JSON, shown to readers as text. Stored as post meta and
+	 * printed here, nothing can strip it.
+	 */
+	public static function output() {
+		if ( ! is_singular() ) { return; }
+		$stored = get_post_meta( get_queried_object_id(), self::META_KEY, true );
+		if ( ! is_string( $stored ) || '' === $stored ) { return; }
+		$data = json_decode( $stored, true );
+		if ( ! is_array( $data ) || empty( $data['mainEntity'] ) || 'FAQPage' !== ( $data['@type'] ?? '' ) ) { return; }
+		// JSON_HEX_TAG makes a stray "</script" in an answer harmless.
+		$json = wp_json_encode( $data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP );
+		if ( $json ) { echo "\n<script type=\"application/ld+json\">" . $json . "</script>\n"; }
+	}
+
 	/**
 	 * Extract Q&A pairs from the FAQ section of clean article HTML (before
 	 * to_blocks() runs, so plain <h2>/<h3>/<p> tags rather than Gutenberg
-	 * block comments) and return a <script type="application/ld+json"> tag,
-	 * or '' if no FAQ section was found.
+	 * block comments) and return the FAQPage schema as JSON text, or '' if no
+	 * FAQ section was found.
 	 */
-	public static function build( $html ) {
+	public static function build_json( $html ) {
 		$pairs = self::extract_pairs( $html );
 		if ( empty( $pairs ) ) { return ''; }
 
@@ -38,15 +61,8 @@ class Verlo_Faq_Schema {
 			),
 		);
 
-		$json = wp_json_encode( $schema );
-		if ( ! $json ) { return ''; }
-
-		// Defensive: a literal "</script" inside answer text (rare, but the
-		// model doesn't know this is being embedded in one) would otherwise
-		// close the tag early and break the page.
-		$json = str_replace( '</script', '<\/script', $json );
-
-		return "\n\n<script type=\"application/ld+json\">{$json}</script>\n";
+		$json = wp_json_encode( $schema, JSON_UNESCAPED_UNICODE );
+		return $json ? $json : '';
 	}
 
 	/**
