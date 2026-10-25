@@ -1,5 +1,9 @@
 <?php
 // Simulates Verlo pushing signed articles to this site, through WordPress's real REST stack.
+// A real delivery is not made by an administrator, so WordPress filters the content it saves (this strips <script>
+// tags and leaves their text behind). Run every check that way, as it happens on a live site.
+wp_set_current_user( 0 );
+kses_init_filters();
 $key  = 'vlo_' . str_repeat('a1B2', 12);
 $dest = '11111111-2222-4333-8444-555555555555';
 Verlo_Settings::update( array( 'destination_id' => $dest, 'key' => $key ) );
@@ -37,7 +41,27 @@ $ok( 'post exists as draft', $p && 'draft' === $p->post_status );
 $ok( 'title and slug', $p && 'How to descale a kettle' === $p->post_title );
 $ok( 'blocks used', $p && false !== strpos( $p->post_content, '<!-- wp:heading' ) && false !== strpos( $p->post_content, '<!-- wp:list' ) );
 $ok( 'script removed', $p && false === strpos( $p->post_content, 'alert(1)' ) );
-$ok( 'FAQ schema embedded', $p && false !== strpos( $p->post_content, 'application/ld+json' ) && false !== strpos( $p->post_content, 'FAQPage' ) );
+// FAQ structured data: kept in post meta and printed in the page head, never in the body (a script in the body is
+// stripped on a live site and its JSON ends up visible as text).
+$ok( 'no schema text or script left in the post body', $p && false === strpos( $p->post_content, 'FAQPage' ) && false === strpos( $p->post_content, 'ld+json' ) && false === strpos( $p->post_content, '@context' ) );
+$stored = get_post_meta( $id, '_verlo_faq_jsonld', true );
+$ok( 'FAQ schema stored as post meta', is_string( $stored ) && false !== strpos( $stored, '"@type":"FAQPage"' ) && false !== strpos( $stored, 'How often?' ), (string) $stored );
+// Reading the page is a different request from the delivery: an administrator previewing the draft.
+wp_set_current_user( 1 );
+$GLOBALS['wp_query'] = new WP_Query( array( 'p' => $id, 'post_status' => 'any' ) );
+ob_start(); Verlo_Faq_Schema::output(); $head = ob_get_clean();
+$ok( 'FAQ schema printed once in the page head as a script', 1 === substr_count( $head, 'application/ld+json' ) && false !== strpos( $head, '"@type":"FAQPage"' ) && false !== strpos( $head, '</script>' ), $head );
+$ld = json_decode( trim( preg_replace( '#</?script[^>]*>#', '', $head ) ), true );
+$ok( 'the printed schema is valid JSON with the question and answer', is_array( $ld ) && 'Question' === ( $ld['mainEntity'][0]['@type'] ?? '' ) && 'How often?' === ( $ld['mainEntity'][0]['name'] ?? '' ) );
+$GLOBALS['wp_query'] = new WP_Query( array( 'post_type' => 'post', 'posts_per_page' => 2 ) );
+ob_start(); Verlo_Faq_Schema::output(); $listing = ob_get_clean();
+$ok( 'nothing is printed on a list of posts', '' === trim( $listing ) );
+update_post_meta( $id, '_verlo_faq_jsonld', wp_slash( '{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Q?","acceptedAnswer":{"@type":"Answer","text":"a </script><script>alert(1)</script>"}}]}' ) );
+$GLOBALS['wp_query'] = new WP_Query( array( 'p' => $id, 'post_status' => 'any' ) );
+ob_start(); Verlo_Faq_Schema::output(); $evil = ob_get_clean();
+$ok( 'a closing script tag inside an answer cannot break out of the schema', 1 === substr_count( strtolower( $evil ), '</script>' ) && false === strpos( $evil, '<script>alert' ) );
+update_post_meta( $id, '_verlo_faq_jsonld', wp_slash( $stored ) );
+wp_set_current_user( 0 ); // back to the delivery's (unauthenticated) context
 $ok( 'category set', has_term( 'Guides', 'category', $id ) );
 $ok( 'tracked by article id', get_post_meta( $id, '_verlo_article_id', true ) === 'art-1' );
 

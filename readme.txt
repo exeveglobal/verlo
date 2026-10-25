@@ -4,7 +4,7 @@ Tags: seo, content, publishing, articles, faq schema
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 2.1.0
+Stable tag: 2.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -45,6 +45,9 @@ The plugin contacts Verlo to collect waiting articles and to report whether each
 Verlo's settings are removed. Posts that were published stay exactly as they are.
 
 == Changelog ==
+
+= 2.1.1 =
+* Fixed: the FAQ structured data could appear as plain text in the article. It is now added to the page head instead of the post body. Articles delivered with 2.1.0 or earlier show the fix after their next update from Verlo.
 
 = 2.1.0 =
 * A site that collects its articles now collects at once when Verlo says one is waiting, instead of up to five minutes later. Sites on an older version keep working and collect on the usual schedule.

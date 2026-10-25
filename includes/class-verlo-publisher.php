@@ -32,6 +32,7 @@ class Verlo_Publisher {
 		$title   = sanitize_text_field( (string) $a['title'] );
 		$excerpt = sanitize_textarea_field( isset( $a['excerpt'] ) ? (string) $a['excerpt'] : '' );
 		$content = self::build_content( (string) $a['content_html'] );
+		$faq     = Verlo_Faq_Schema::build_json( wp_kses_post( (string) $a['content_html'] ) );
 
 		$postarr = array(
 			'post_title'   => $title,
@@ -54,6 +55,12 @@ class Verlo_Publisher {
 		$id = (int) $id;
 		if ( ! $id ) { return new WP_Error( 'verlo_save_failed', 'WordPress could not save the post.' ); }
 
+		// FAQ structured data lives in meta and is printed in the page head (see Verlo_Faq_Schema::output).
+		if ( '' !== $faq ) {
+			update_post_meta( $id, Verlo_Faq_Schema::META_KEY, wp_slash( $faq ) );
+		} else {
+			delete_post_meta( $id, Verlo_Faq_Schema::META_KEY );
+		}
 		update_post_meta( $id, '_verlo_article_id', $article_id );
 		update_post_meta( $id, '_verlo_version', isset( $a['version'] ) ? (int) $a['version'] : 0 );
 		if ( '' !== $idempotency_key ) { update_post_meta( $id, '_verlo_last_key', $idempotency_key ); }
@@ -131,15 +138,9 @@ class Verlo_Publisher {
 		return 0;
 	}
 
-	/** Blocks for the editor, plus the FAQ structured data as the last block. Content is cleaned even though Verlo already did. */
+	/** Blocks for the editor. Content is cleaned even though Verlo already did. */
 	protected static function build_content( $html ) {
-		$clean  = wp_kses_post( $html );
-		$blocks = Verlo_Blocks::to_blocks( $clean );
-		$schema = Verlo_Faq_Schema::build( $clean );
-		if ( '' !== $schema ) {
-			$blocks .= "\n\n<!-- wp:html -->" . $schema . "<!-- /wp:html -->";
-		}
-		return $blocks;
+		return Verlo_Blocks::to_blocks( wp_kses_post( $html ) );
 	}
 
 	protected static function author_id() {
