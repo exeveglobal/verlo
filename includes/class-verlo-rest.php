@@ -19,6 +19,11 @@ class Verlo_Rest {
 			'callback'            => array( __CLASS__, 'publish' ),
 			'permission_callback' => array( __CLASS__, 'authorize' ),
 		) );
+		register_rest_route( 'verlo/v1', '/wake', array(
+			'methods'             => 'POST',
+			'callback'            => array( __CLASS__, 'wake' ),
+			'permission_callback' => array( __CLASS__, 'authorize' ),
+		) );
 		register_rest_route( 'verlo/v1', '/ping', array(
 			'methods'             => 'POST',
 			'callback'            => array( __CLASS__, 'ping' ),
@@ -40,6 +45,18 @@ class Verlo_Rest {
 	public static function ping( $request ) {
 		Verlo_Settings::update( array( 'last_contact' => time(), 'last_ok' => time(), 'last_error' => '' ) );
 		return new WP_REST_Response( array( 'ok' => true, 'plugin' => VERLO_VERSION, 'wp' => get_bloginfo( 'version' ), 'seo' => self::seo_plugin() ), 200 );
+	}
+
+	/**
+	 * Verlo says an article is waiting. A site that collects its articles would otherwise only find out at its next
+	 * scheduled check (up to five minutes later, and only when someone visits the site), so collect now. The request
+	 * carries nothing but its signature; what is collected still comes from Verlo and is checked as usual, and a
+	 * second wake while a check is running does nothing (the check holds its own lock).
+	 */
+	public static function wake( $request ) {
+		ignore_user_abort( true ); // finish collecting even if Verlo has stopped waiting for the answer
+		$res = Verlo_Poller::run();
+		return new WP_REST_Response( array( 'ok' => true, 'published' => (int) $res['published'] ), 200 );
 	}
 
 	public static function publish( $request ) {

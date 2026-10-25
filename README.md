@@ -9,7 +9,7 @@ By [EXEVE](https://exeve.global/).
 Both ways are signed with the site's connection key (HMAC-SHA256 over `<timestamp>.<body>`, five minute window, constant-time check).
 
 - **Push:** Verlo calls `POST /wp-json/verlo/v1/publish` (and `/ping`).
-- **Pull:** the site asks Verlo for waiting articles every five minutes (`GET /v1/connect/pending`) and reports each result (`POST /v1/connect/result`). Works anywhere the site can reach the internet.
+- **Pull:** the site asks Verlo for waiting articles every five minutes (`GET /v1/connect/pending`) and reports each result (`POST /v1/connect/result`). Works anywhere the site can reach the internet. When Verlo can reach the site it also sends a signed `POST /wp-json/verlo/v1/wake`, which makes the site collect immediately; if that cannot get through, the five-minute check still does the job.
 
 The same article always maps to the same post (`_verlo_article_id`), so an update changes that post and a repeated delivery changes nothing.
 
