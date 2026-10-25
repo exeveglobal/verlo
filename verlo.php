@@ -3,7 +3,7 @@
  * Plugin Name:       Verlo
  * Plugin URI:        https://verlohub.com/
  * Description:       Publishes the articles you write and approve in Verlo to this site. Planning, writing and editing all happen at app.verlohub.com; this plugin only receives finished articles and creates or updates the post, with the layout, SEO fields and FAQ data in place.
- * Version:           2.1.0
+ * Version:           2.1.1
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            EXEVE
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'VERLO_VERSION', '2.1.0' );
+define( 'VERLO_VERSION', '2.1.1' );
 define( 'VERLO_FILE', __FILE__ );
 define( 'VERLO_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VERLO_URL', plugin_dir_url( __FILE__ ) );
@@ -50,6 +50,7 @@ add_action( 'plugins_loaded', function () {
 	Verlo_Rest::init();
 	Verlo_Poller::init();
 	Verlo_Content_Styles::init();
+	Verlo_Faq_Schema::init();
 	if ( is_admin() ) {
 		Verlo_Admin::init();
 	}
