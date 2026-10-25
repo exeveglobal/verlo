@@ -86,4 +86,16 @@ $payload3['article']['image'] = array( 'url' => 'https://evil.example/photos/1/x
 $r = req( 'publish', $payload3, $key, array( 'X-Verlo-Idempotency-Key' => 'art-3:v1:create' ) );
 $ok( 'a non-Pexels image address is ignored, article still published', 200 === $r->get_status() && ! has_post_thumbnail( (int) $r->get_data()['external_id'] ) );
 
+// 9. wake: Verlo tells a collecting site that an article is waiting. Same signature rules as every other request.
+$r = req( 'wake', new stdClass(), $key );
+$ok( 'wake with a valid signature is accepted', 200 === $r->get_status() && ! empty( $r->get_data()['ok'] ), json_encode( $r->get_data() ) );
+$r = req( 'wake', new stdClass(), 'vlo_' . str_repeat( 'z9Y8', 12 ) );
+$ok( 'wake with the wrong key is refused', 401 === $r->get_status() );
+$r = req( 'wake', new stdClass(), $key, array(), function ( $body ) { return $body . ' '; } );
+$ok( 'wake with a changed body is refused', 401 === $r->get_status() );
+$stale = new WP_REST_Request( 'POST', '/verlo/v1/wake' );
+$old   = Verlo_Signature::sign( $key, time() - 3600, '{}' );
+$stale->set_header( 'x_verlo_timestamp', (string) ( time() - 3600 ) ); $stale->set_header( 'x_verlo_signature', $old ); $stale->set_body( '{}' );
+$ok( 'wake with an old timestamp is refused', 401 === rest_do_request( $stale )->get_status() );
+
 echo implode( "\n", $out ) . "\n";
